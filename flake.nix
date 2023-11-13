@@ -26,6 +26,7 @@
 
           pkgs.pkg-config
           pkgs.pulseaudio
+          pkgs.SDL2
         ];
       };
     };
