@@ -35,6 +35,9 @@ executable cse230-project
     main-is:          Main.hs
     -- other-modules:
     -- other-extensions:
-    build-depends:    base ^>=4.17.2.0
+    build-depends:
+        base ^>=4.17.2.0,
+        proteaaudio ^>= 0.10.1,
+        brick ^>= 2.1.1
     hs-source-dirs:   app
     default-language: GHC2021
