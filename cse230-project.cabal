@@ -1,0 +1,40 @@
+cabal-version:      3.0
+name:               cse230-project
+version:            0.1.0.0
+synopsis:           A Cool Project
+-- description:
+homepage:           https://github.com/huantianad/cse230-project
+license:            LGPL-3.0-only
+license-file:       LICENSE
+author:             huantian
+maintainer:         davidtianli@gmail.com
+-- copyright:
+category:           Game
+build-type:         Simple
+extra-doc-files:    CHANGELOG.md
+-- extra-source-files:
+
+common warnings
+    ghc-options: 
+        -Weverything
+        -Wno-implicit-prelude
+        -Wno-missing-exported-signatures
+        -Wno-missing-import-lists
+        -Wno-missed-specialisations
+        -Wno-all-missed-specialisations
+        -Wno-unsafe
+        -Wno-safe
+        -Wno-missing-safe-haskell-mode
+        -Wno-missing-local-signatures
+        -Wno-monomorphism-restriction
+
+    default-extensions:
+
+executable cse230-project
+    import:           warnings
+    main-is:          Main.hs
+    -- other-modules:
+    -- other-extensions:
+    build-depends:    base ^>=4.17.2.0
+    hs-source-dirs:   app
+    default-language: GHC2021
