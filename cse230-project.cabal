@@ -43,7 +43,7 @@ executable cse230-project
     -- other-extensions:
     build-depends:
         base ^>=4.17.2.0,
-        proteaaudio-sdl ^>= 0.10.1,
+        proteaaudio ^>= 0.10.1,
         vty >= 6.0,
         brick ^>= 2.1.1,
         microlens ^>= 0.4.13.1,

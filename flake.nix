@@ -10,10 +10,11 @@
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
 
-      ghc = pkgs.haskell.compiler.ghc94;
+      ghcVersion = "94";
 
+      ghc = pkgs.haskell.compiler."ghc${ghcVersion}";
       hsl = pkgs.haskell-language-server.override {
-        supportedGhcVersions = [ "94" ];
+        supportedGhcVersions = [ ghcVersion ];
       };
     in
     {
@@ -22,10 +23,9 @@
           ghc
           hsl
           pkgs.cabal-install
-          pkgs.stack
 
           pkgs.pkg-config
-          pkgs.pulseaudio
+          pkgs.libpulseaudio
           pkgs.SDL2
         ];
       };

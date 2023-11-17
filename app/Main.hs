@@ -1,9 +1,11 @@
+{-# LANGUAGE LambdaCase #-}
 module Main (main) where
 
 import Control.Monad
 import Control.Monad.IO.Class
+import Control.Exception (bracket)
 
-import Sound.ProteaAudio.SDL
+import Sound.ProteaAudio
 
 import qualified Graphics.Vty as V
 
@@ -24,6 +26,7 @@ import qualified Brick.Types as T
 
 import Lens.Micro.TH (makeLenses)
 import Lens.Micro.Mtl (use, (.=))
+import Data.Foldable (foldlM)
 
 data Choice = Red | Blue | Green
     deriving Show
@@ -36,7 +39,7 @@ data Name =
 
 data MyState = MyState {
     _dialog :: D.Dialog Choice Name,
-    _sound :: Sound,
+    _currentSound :: Sound,
     _playing :: Bool
 }
 makeLenses ''MyState
@@ -54,15 +57,19 @@ appEvent (VtyEvent ev) =
         _ -> do
             T.zoom dialog $ D.handleDialogEvent ev
 
-            soundState <- use sound
+            soundState <- use currentSound
             playingState <- use playing
-            
+
             _ <- liftIO $ soundUpdate soundState (not playingState) 1 1 0 1
             playing .= not playingState
 appEvent _ = return ()
 
-initialState :: MyState
-initialState = MyState { _dialog = D.dialog (Just $ str "Title") (Just (RedButton, choices)) 50, _playing = False }
+initialState :: Sound -> MyState
+initialState sound = MyState {
+    _dialog = D.dialog (Just $ str "Title") (Just (RedButton, choices)) 50,
+    _currentSound = sound,
+    _playing = False
+}
     where
         choices = [ ("Red",   RedButton,   Red)
                   , ("Blue",  BlueButton,  Blue)
@@ -76,31 +83,64 @@ theMap = A.attrMap V.defAttr
     , (D.buttonSelectedAttr, bg V.yellow)
     ]
 
-myStartEvent :: T.EventM Name MyState ()
-myStartEvent = do
-    result <- liftIO $ initAudio 64 48000 1024
-    liftIO $ unless result $ fail "Failed to initialize the audio system!!"
-
-    sample <- liftIO $ sampleFromFile "audio/test.ogg" 1.0
-    soundState <- liftIO $ soundPlay sample 1 1 0 1
-
-    sound .= soundState
-
 theApp :: M.App MyState e Name
 theApp =
     M.App { M.appDraw = drawUI
           , M.appChooseCursor = M.showFirstCursor
           , M.appHandleEvent = appEvent
-          , M.appStartEvent = myStartEvent
+          , M.appStartEvent = return ()
           , M.appAttrMap = const theMap
           }
 
+-- Perhaps split this into two bits in the future, one for audio system,
+-- one for sample. How important is sampleDestroy-ing the sample tho
+withSample :: (Sample -> IO ()) -> IO ()
+withSample = bracket aquire release where
+    aquire = do
+        result <- initAudio 64 48000 1024
+        unless result $ fail "Failed to initialize the audio system!!"
+        sampleFromFile "audio/test.ogg" 1.0
+
+    release sample = do
+        result <- sampleDestroy sample
+        unless result $ fail "Failed to destroy sample."
+        finishAudio
 
 main :: IO ()
-main = do
-    d <- M.defaultMain theApp initialState
+main = withSample $ \sample -> do
+    sound <- soundPlay sample 1 1 0 1
+
+    d <- M.defaultMain theApp $ initialState sound
     putStrLn $ "You chose: " <> show (D.dialogSelection $ _dialog d)
 
-    -- _ <- sampleDestroy sample
-    finishAudio
+data Parser a = Parser (String -> Maybe (a, String))
+instance Functor Parser where
+instance Applicative Parser where
+    pure x = Parser $ \s -> pure (x, s)
+instance Monad Parser where
+    return = pure
 
+    (>>=) x y = Parser $ \s -> do
+        (a, s') <- runParser x s
+        runParser (y a) s'
+
+runParser (Parser f) = f
+
+oneChar :: Parser Char
+oneChar = Parser $ \case
+    [] -> Nothing
+    x:xs -> Just (x, xs)
+
+failP :: Parser a
+failP = Parser (\_ -> Nothing)
+
+char c = do
+    x <- oneChar
+    if x == c then pure c else failP
+
+string :: String -> Parser String
+string = foldlM (\b a -> (b ++ [a]) <$ char a) ""
+
+
+many :: [Parser a] -> Parser [a]
+many = foldlM (\b a -> (\val -> b ++ [val]) <$> a) []
