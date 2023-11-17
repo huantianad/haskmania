@@ -1,7 +1,7 @@
 cabal-version:      3.0
 name:               cse230-project
 version:            0.1.0.0
-synopsis:           A Cool Project
+synopsis:           A terminal-based 4k VSRG, written in Haskell and brick.
 -- description:
 homepage:           https://github.com/huantianad/cse230-project
 license:            LGPL-3.0-only
