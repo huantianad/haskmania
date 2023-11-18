@@ -4,7 +4,7 @@ A terminal-based 4k VSRG, written in Haskell and brick.
 ## Members
 - David Li (A17966279, huantianad)
 - Sean Yen (A16948219, SheepTester)
-- put your name here
+- Gary Lin (A16915179, Atlae)
 - put your name here
 
 ## Milestone 1: Proposal
