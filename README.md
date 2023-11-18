@@ -8,6 +8,14 @@ A terminal-based 4k VSRG, written in Haskell and brick.
 - put your name here
 
 ## Milestone 1: Proposal
+
+<img
+  src="https://repository-images.githubusercontent.com/123398967/40a2f200-be6f-11eb-9255-25474eebac8a"
+  alt="Various examples of a 4k VSRG"
+  width="400"
+  align="right"
+/>
+
 We intend to create a rhythm game in the terminal using Haskell and [`brick`][brick]. Specifically, the game will be a 4-key vertial scrolling rhythm game (4k VSRG) similar to existing games like [osu!mania][osu], [Quaver][quaver], and [DDR][ddr], where indicators glide down from the top, following the music's rhythm, and the goal is to press the corresponding key right as it lands on the bottom.
 
 Architecturally, we are looking at using [`proteaaudio`][proteaaudio] to play audio. A major problem is the inability to read the current audio time to sync the game to the audio precisely.
