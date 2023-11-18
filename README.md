@@ -8,10 +8,22 @@ A terminal-based 4k VSRG, written in Haskell and brick.
 - put your name here
 
 ## Milestone 1: Proposal
-Our intent is to create a rhythm game in the terminal using Haskell and brick. Specifically, we aim to create a generic 4-key vertial scrolling rhythm game, similar to existing games like osu!mania, Quaver, and DDR.
+We intend to create a rhythm game in the terminal using Haskell and [`brick`][brick]. Specifically, the game will be a 4-key vertial scrolling rhythm game (4k VSRG) similar to existing games like [osu!mania][osu], [Quaver][quaver], and [DDR][ddr], where indicators glide down from the top, following the music's rhythm, and the goal is to press the corresponding key right as it lands on the bottom.
 
-Archtectually, we are currently exploring the usage of the `proteaaudio` library to playback audio. The current roadblock is the inability to read the current audio position, to allow the game to be synced to the audio properly.
+Architecturally, we are looking at using [`proteaaudio`][proteaaudio] to play audio. A major problem is the inability to read the current audio time to sync the game to the audio precisely.
 
-For storing chart data, we intend to use the `.osu` file format, used by the rhythm game osu. We will implement a cusom parser that reads the relevant data from the file. By not using a custom file format, we're able to reuse existing charts for other games.
+For storing level data, we will implement a custom parser for the [`.osu`][osufile] file format, used by the rhythm game [osu][osu]. By using a standard file format, we're able to reuse existing levels made for other games.
 
-The main difficulty will be the game itself. First, create a minimally working game, that properly reads user input, and can smoothly display the notes moving vertically down the screen. More description of how the game might work or looks in general? Maybe a better description of 4k in the first paragraph. Scoring system?
+There are many challenges to making the game itself. Our goal is to create a minimally working game that properly reads user input and can smoothly display the notes moving down the screen. We will then settle on more specific details, such as:
+
+- The overall appearance of the game
+- The scoring system
+- Specific game mechanics
+<!-- More description of how the game might work or looks in general? Maybe a better description of 4k in the first paragraph. Scoring system? -->
+
+[brick]: https://hackage.haskell.org/package/brick
+[proteaaudio]: https://hackage.haskell.org/package/proteaaudio
+[osufile]: https://osu.ppy.sh/wiki/en/Client/File_formats/osu_%28file_format%29
+[osu]: https://en.wikipedia.org/wiki/Osu!
+[quaver]: https://quavergame.com/
+[ddr]: https://en.wikipedia.org/wiki/Dance_Dance_Revolution
