@@ -44,6 +44,7 @@ executable cse230-project
     build-depends:
         base ^>=4.17.2.0,
         proteaaudio ^>= 0.10.1,
+        -- we don't need it but for some reason i get worse latency if i don't have this
         proteaaudio-sdl ^>= 0.10.1,
         vty >= 6.0,
         brick ^>= 2.1.1,
