@@ -44,9 +44,10 @@ executable cse230-project
     build-depends:
         base ^>=4.17.2.0,
         proteaaudio ^>= 0.10.1,
+        proteaaudio-sdl ^>= 0.10.1,
         vty >= 6.0,
         brick ^>= 2.1.1,
-        microlens ^>= 0.4.13.1,
+        -- microlens ^>= 0.4.13.1,
         microlens-th ^>= 0.4.3.14,
         microlens-mtl ^>= 0.2.0.3,
     hs-source-dirs:   app

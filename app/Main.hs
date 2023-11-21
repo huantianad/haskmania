@@ -112,35 +112,3 @@ main = withSample $ \sample -> do
 
     d <- M.defaultMain theApp $ initialState sound
     putStrLn $ "You chose: " <> show (D.dialogSelection $ _dialog d)
-
-data Parser a = Parser (String -> Maybe (a, String))
-instance Functor Parser where
-instance Applicative Parser where
-    pure x = Parser $ \s -> pure (x, s)
-instance Monad Parser where
-    return = pure
-
-    (>>=) x y = Parser $ \s -> do
-        (a, s') <- runParser x s
-        runParser (y a) s'
-
-runParser (Parser f) = f
-
-oneChar :: Parser Char
-oneChar = Parser $ \case
-    [] -> Nothing
-    x:xs -> Just (x, xs)
-
-failP :: Parser a
-failP = Parser (\_ -> Nothing)
-
-char c = do
-    x <- oneChar
-    if x == c then pure c else failP
-
-string :: String -> Parser String
-string = foldlM (\b a -> (b ++ [a]) <$ char a) ""
-
-
-many :: [Parser a] -> Parser [a]
-many = foldlM (\b a -> (\val -> b ++ [val]) <$> a) []
