@@ -51,5 +51,6 @@ executable cse230-project
         microlens ^>= 0.4.13.1,
         microlens-th ^>= 0.4.3.14,
         microlens-mtl ^>= 0.2.0.3,
+        time ^>= 1.12.2,
     hs-source-dirs:   app
     default-language: GHC2021

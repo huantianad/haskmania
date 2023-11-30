@@ -18,6 +18,7 @@ import Brick.Widgets.Core
   ( padAll
   , str
   )
+import Brick.BChan
 import qualified Brick.Widgets.Dialog as D
 import qualified Brick.Widgets.Center as C
 import qualified Brick.AttrMap as A
@@ -27,6 +28,9 @@ import qualified Brick.Types as T
 import Lens.Micro ((^.))
 import Lens.Micro.TH (makeLenses)
 import Lens.Micro.Mtl (use, (.=))
+
+import Data.Time.Clock.System (getSystemTime, SystemTime (MkSystemTime, systemSeconds, systemNanoseconds))
+import Control.Concurrent (forkIO, threadDelay)
 
 data Choice = Red | Blue | Green
     deriving Show
@@ -38,43 +42,28 @@ data Name =
     deriving (Show, Eq, Ord)
 
 data MyState = MyState {
-    _dialog :: D.Dialog Choice Name,
-    _currentSound :: Sound,
-    _playing :: Bool
+    _currentMs :: Int
 }
 makeLenses ''MyState
 
 drawUI :: MyState -> [Widget Name]
 drawUI d = [ui]
     where
-        ui = D.renderDialog (d ^. dialog) $ C.hCenter $ padAll 1 $ str "This is the dialog body."
+        ui = C.hCenter $ padAll 1 $ str $ show (d ^. currentMs)
 
-appEvent :: BrickEvent Name e -> T.EventM Name MyState ()
+appEvent :: BrickEvent Name Tick -> T.EventM Name MyState ()
 appEvent (VtyEvent ev) =
     case ev of
         V.EvKey V.KEsc [] -> M.halt
         V.EvKey V.KEnter [] -> M.halt
-        _ -> do
-            T.zoom dialog $ D.handleDialogEvent ev
-
-            soundState <- use currentSound
-            playingState <- use playing
-
-            _ <- liftIO $ soundUpdate soundState (not playingState) 1 1 0 1
-            playing .= not playingState
+        _ -> return ()
+appEvent (AppEvent (Tick x)) = currentMs .= x
 appEvent _ = return ()
 
-initialState :: Sound -> MyState
-initialState sound = MyState {
-    _dialog = D.dialog (Just $ str "Title") (Just (RedButton, choices)) 50,
-    _currentSound = sound,
-    _playing = False
+initialState :: MyState
+initialState = MyState {
+    _currentMs = 0
 }
-    where
-        choices = [ ("Red",   RedButton,   Red)
-                  , ("Blue",  BlueButton,  Blue)
-                  , ("Green", GreenButton, Green)
-                  ]
 
 theMap :: A.AttrMap
 theMap = A.attrMap V.defAttr
@@ -83,7 +72,7 @@ theMap = A.attrMap V.defAttr
     , (D.buttonSelectedAttr, bg V.yellow)
     ]
 
-theApp :: M.App MyState e Name
+theApp :: M.App MyState Tick Name
 theApp =
     M.App { M.appDraw = drawUI
           , M.appChooseCursor = M.showFirstCursor
@@ -106,9 +95,27 @@ withSample = bracket aquire release where
         unless result $ fail "Failed to destroy sample."
         finishAudio
 
-main :: IO ()
-main = withSample $ \sample -> do
-    sound <- soundPlay sample 1 1 0 1
+newtype Tick = Tick Int
 
-    d <- M.defaultMain theApp $ initialState sound
-    putStrLn $ "You chose: " <> show (D.dialogSelection $ d ^. dialog)
+msDiff :: SystemTime -> SystemTime -> Int
+msDiff
+    (MkSystemTime {systemSeconds = as, systemNanoseconds = an}) 
+    (MkSystemTime {systemSeconds = bs, systemNanoseconds = bn}) 
+        = (fromIntegral as - fromIntegral bs) * 1000 
+        + (fromIntegral an - fromIntegral bn) `div` 1000000
+
+soundThread :: BChan Tick -> IO ()
+soundThread bChan = withSample $ \sample -> do
+    startTime <- getSystemTime
+    _ <- soundPlay sample 1 1 0 1
+    forever $ do 
+        newTime <- getSystemTime
+        writeBChan bChan $ Tick $ msDiff newTime startTime
+        threadDelay 100000
+        
+main :: IO ()
+main = do
+    bChan <- newBChan 10
+    void $ forkIO $ soundThread bChan
+
+    void $ M.customMainWithDefaultVty (Just bChan) theApp initialState
