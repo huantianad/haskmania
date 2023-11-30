@@ -1,7 +1,30 @@
 # cse230-project
-A terminal-based 4k VSRG, written in Haskell and brick. 
+
+A terminal-based 4k VSRG, written in Haskell and brick.
+
+## Installation
+
+We recommend using Nix.
+
+For Ubuntu on WSL:
+
+```shell
+# Install dependencies
+$ sudo apt install libpulse-dev libgmp3-dev
+# Install dependencies
+$ cabal install
+```
+
+## Usage
+
+```shell
+$ cabal run
+```
+
+Currently, there is no way to exit the game. You must kill the shell through external means, such as by using your mouse or turning off your computer.
 
 ## Members
+
 - David Li (A17966279, [huantianad](https://github.com/huantianad))
 - Sean Yen (A16948219, [SheepTester](https://github.com/SheepTester))
 - Gary Lin (A16915179, [Atlae](https://github.com/Atlae))
