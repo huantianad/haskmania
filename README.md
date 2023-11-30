@@ -4,10 +4,10 @@ A terminal-based 4k VSRG, written in Haskell and brick.
 
 ## Installation
 
-We recommend using Nix.
+### Building with Nix (Recommended)
+A Nix devShell with the required dependencies is provided with the Nix flake, simply use `nix develop` to enter it.
 
-For Ubuntu on WSL:
-
+### Building on Ubuntu WSL
 ```shell
 # Install dependencies
 $ sudo apt install libpulse-dev libgmp3-dev
@@ -58,8 +58,3 @@ There are many challenges to making the game itself. Our goal is to create a min
 [osu]: https://en.wikipedia.org/wiki/Osu!
 [quaver]: https://quavergame.com/
 [ddr]: https://en.wikipedia.org/wiki/Dance_Dance_Revolution
-
-## Building
-
-### Building with Nix
-A Nix devShell with the required dependencies is provided with the Nix flake, simply use `nix develop` to enter it and `cabal run` to build and run the program.
