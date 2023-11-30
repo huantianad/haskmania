@@ -1,9 +1,11 @@
 {-# LANGUAGE LambdaCase #-}
 module Main (main) where
 
-import Control.Monad
-import Control.Monad.IO.Class
+import Control.Concurrent (forkIO, threadDelay)
 import Control.Exception (bracket)
+import Control.Monad
+
+import Data.Time.Clock.System (getSystemTime, SystemTime (MkSystemTime, systemSeconds, systemNanoseconds))
 
 import Sound.ProteaAudio
 
@@ -29,29 +31,17 @@ import Lens.Micro ((^.))
 import Lens.Micro.TH (makeLenses)
 import Lens.Micro.Mtl (use, (.=))
 
-import Data.Time.Clock.System (getSystemTime, SystemTime (MkSystemTime, systemSeconds, systemNanoseconds))
-import Control.Concurrent (forkIO, threadDelay)
-
-data Choice = Red | Blue | Green
-    deriving Show
-
-data Name =
-    RedButton
-    | BlueButton
-    | GreenButton
-    deriving (Show, Eq, Ord)
-
 data MyState = MyState {
     _currentMs :: Int
 }
 makeLenses ''MyState
 
-drawUI :: MyState -> [Widget Name]
+drawUI :: MyState -> [Widget ()]
 drawUI d = [ui]
     where
         ui = C.hCenter $ padAll 1 $ str $ show (d ^. currentMs)
 
-appEvent :: BrickEvent Name Tick -> T.EventM Name MyState ()
+appEvent :: BrickEvent () Tick -> T.EventM () MyState ()
 appEvent (VtyEvent ev) =
     case ev of
         V.EvKey V.KEsc [] -> M.halt
@@ -72,7 +62,7 @@ theMap = A.attrMap V.defAttr
     , (D.buttonSelectedAttr, bg V.yellow)
     ]
 
-theApp :: M.App MyState Tick Name
+theApp :: M.App MyState Tick ()
 theApp =
     M.App { M.appDraw = drawUI
           , M.appChooseCursor = M.showFirstCursor
@@ -87,7 +77,7 @@ withSample :: (Sample -> IO ()) -> IO ()
 withSample = bracket aquire release where
     aquire = do
         result <- initAudio 64 48000 1024
-        unless result $ fail "Failed to initialize the audio system!!"
+        unless result $ fail "Failed to initialize the audio system."
         sampleFromFile "audio/test.ogg" 1.0
 
     release sample = do
@@ -108,7 +98,7 @@ soundThread :: BChan Tick -> IO ()
 soundThread bChan = withSample $ \sample -> do
     startTime <- getSystemTime
     _ <- soundPlay sample 1 1 0 1
-    forever $ do 
+    forever $ do
         newTime <- getSystemTime
         writeBChan bChan $ Tick $ msDiff newTime startTime
         threadDelay 100000
