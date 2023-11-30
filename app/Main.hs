@@ -15,6 +15,7 @@ import Brick.Widgets.Center qualified as C
 import Brick.Widgets.Core
   ( padAll,
     str,
+    (<=>),
   )
 import Brick.Widgets.Dialog qualified as D
 import Control.Concurrent (forkIO, threadDelay)
@@ -42,22 +43,24 @@ bpm :: Int
 bpm = 95
 
 drawUI :: MyState -> [Widget ()]
-drawUI d = [ui]
+drawUI d = [C.hCenter $ padAll 1 (currentTime <=> isPlaying')]
   where
-    ui = C.hCenter $ padAll 1 $ str $ show $ floor (d ^. currentMs % 60000 * fromIntegral bpm)
+    currentTime = str $ show $ floor (d ^. currentMs % 60000 * fromIntegral bpm)
+    isPlaying' = str $ if _isPlaying d then "playing" else "paused"
 
 appEvent :: BrickEvent () Tick -> T.EventM () MyState ()
 appEvent (VtyEvent ev) =
   case ev of
     V.EvKey V.KEsc [] -> M.halt
     V.EvKey V.KEnter [] -> M.halt
-    _ -> do
+    V.EvKey _ _ -> do
       s <- use sound
       p <- use isPlaying
 
       result <- liftIO $ PA.soundUpdate (fromJust s) p 1 1 0 1
       unless result $ liftIO $ fail "Failed to toggle sound state"
       isPlaying .= not p
+    _ -> return ()
 appEvent (AppEvent (Tick s x)) = currentMs .= x >> sound .= Just s
 appEvent _ = return ()
 

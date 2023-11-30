@@ -5,12 +5,14 @@ A terminal-based 4k VSRG, written in Haskell and brick.
 ## Installation
 
 ### Building with Nix (Recommended)
+
 A Nix devShell with the required dependencies is provided with the Nix flake, simply use `nix develop` to enter it.
 
 ### Building on Ubuntu WSL
+
 ```shell
 # Install dependencies
-$ sudo apt install libpulse-dev libgmp3-dev
+$ sudo apt install libpulse-dev libgmp3-dev libsdl2-dev
 # Install dependencies
 $ cabal install
 ```
@@ -21,7 +23,7 @@ $ cabal install
 $ cabal run
 ```
 
-Currently, there is no way to exit the game. You must kill the shell through external means, such as by using your mouse or turning off your computer.
+To exit the game, press the escape or enter key.
 
 ## Members
 
