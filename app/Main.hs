@@ -4,7 +4,9 @@ module Main (main) where
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Exception (bracket)
 import Control.Monad
+import Control.Monad.IO.Class (liftIO)
 
+import Data.Maybe (fromJust)
 import Data.Time.Clock.System (getSystemTime, SystemTime (MkSystemTime, systemSeconds, systemNanoseconds))
 
 import Sound.ProteaAudio
@@ -32,7 +34,9 @@ import Lens.Micro.TH (makeLenses)
 import Lens.Micro.Mtl (use, (.=))
 
 data MyState = MyState {
-    _currentMs :: Int
+    _currentMs :: Int,
+    _sound :: Maybe Sound,
+    _isPlaying :: Bool
 }
 makeLenses ''MyState
 
@@ -46,13 +50,21 @@ appEvent (VtyEvent ev) =
     case ev of
         V.EvKey V.KEsc [] -> M.halt
         V.EvKey V.KEnter [] -> M.halt
-        _ -> return ()
-appEvent (AppEvent (Tick x)) = currentMs .= x
+        _ -> do
+            s <- use sound
+            p <- use isPlaying
+
+            result <- liftIO $ soundUpdate (fromJust s) (not p) 1 1 0 1
+            unless result $ liftIO $ fail "Failed to toggle sound state"
+            isPlaying .= not p
+appEvent (AppEvent (Tick s x)) = currentMs .= x >> sound .= Just s
 appEvent _ = return ()
 
 initialState :: MyState
 initialState = MyState {
-    _currentMs = 0
+    _currentMs = 0,
+    _sound = Nothing,
+    _isPlaying = True
 }
 
 theMap :: A.AttrMap
@@ -85,7 +97,7 @@ withSample = bracket aquire release where
         unless result $ fail "Failed to destroy sample."
         finishAudio
 
-newtype Tick = Tick Int
+data Tick = Tick Sound Int
 
 msDiff :: SystemTime -> SystemTime -> Int
 msDiff
@@ -97,10 +109,10 @@ msDiff
 soundThread :: BChan Tick -> IO ()
 soundThread bChan = withSample $ \sample -> do
     startTime <- getSystemTime
-    _ <- soundPlay sample 1 1 0 1
+    sound <- soundPlay sample 1 1 0 1
     forever $ do
         newTime <- getSystemTime
-        writeBChan bChan $ Tick $ msDiff newTime startTime
+        writeBChan bChan $ Tick sound $ msDiff newTime startTime
         threadDelay 100000
         
 main :: IO ()
