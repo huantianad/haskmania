@@ -24,9 +24,9 @@ import qualified Brick.AttrMap as A
 import Brick.Util (on, bg)
 import qualified Brick.Types as T
 
+import Lens.Micro ((^.))
 import Lens.Micro.TH (makeLenses)
 import Lens.Micro.Mtl (use, (.=))
-import Data.Foldable (foldlM)
 
 data Choice = Red | Blue | Green
     deriving Show
@@ -47,7 +47,7 @@ makeLenses ''MyState
 drawUI :: MyState -> [Widget Name]
 drawUI d = [ui]
     where
-        ui = D.renderDialog (_dialog d) $ C.hCenter $ padAll 1 $ str "This is the dialog body."
+        ui = D.renderDialog (d ^. dialog) $ C.hCenter $ padAll 1 $ str "This is the dialog body."
 
 appEvent :: BrickEvent Name e -> T.EventM Name MyState ()
 appEvent (VtyEvent ev) =
@@ -111,4 +111,4 @@ main = withSample $ \sample -> do
     sound <- soundPlay sample 1 1 0 1
 
     d <- M.defaultMain theApp $ initialState sound
-    putStrLn $ "You chose: " <> show (D.dialogSelection $ _dialog d)
+    putStrLn $ "You chose: " <> show (D.dialogSelection $ d ^. dialog)
