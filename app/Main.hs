@@ -2,7 +2,7 @@
 
 module Main (main) where
 
-import Brick (attrName)
+import Brick (Padding (Pad), attrName, emptyWidget, padBottom, padTop, withDefAttr)
 import Brick.AttrMap qualified as A
 import Brick.BChan
 import Brick.Main qualified as M
@@ -48,9 +48,11 @@ bpm = 95
 
 drawUI :: MyState -> [Widget ()]
 drawUI d =
-  [ C.hCenter $ padAll 1 (currentTime <=> isPlaying'),
-    C.vCenter $ drawRow 80 (1, 1, 0) [],
-    withAttr (attrName "background") $ fill ' '
+  [ withDefAttr (attrName "background") $ C.hCenter $ padAll 1 (currentTime <=> isPlaying'),
+    withDefAttr (attrName "background") $ C.vCenter $ padTop (Pad 1) $ foldr (<=>) emptyWidget $ do
+      color <- [(255, 255, 0), (0, 255, 255), (255, 0, 255), (0, 255, 0)]
+      return $ padBottom (Pad 1) $ drawRow 80 color [],
+    withDefAttr (attrName "background") (fill ' ')
   ]
   where
     currentTime = withAttr D.dialogAttr $ str $ show $ floor (d ^. currentMs % 60000 * fromIntegral bpm)

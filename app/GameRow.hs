@@ -26,5 +26,5 @@ withColor back fore = modifyDefAttr (\a -> withBackColor (withForeColor a (toRGB
 drawRow :: Int -> RgbColor -> [RowElement] -> Widget ()
 drawRow width color elements = foldr (<+>) emptyWidget $ do
   col <- [0 .. (width - 1)]
-  let background = overlay (1 - fromIntegral col / fromIntegral width) (0, 0, 0) color
-  return (withColor background background (str "h"))
+  let background = overlay ((1 - fromIntegral col / fromIntegral width) * 0.3) (0, 0, 0) color
+  return (withColor background background (str " "))
