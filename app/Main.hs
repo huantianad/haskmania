@@ -27,11 +27,11 @@ import Graphics.Vty qualified as V
 import Lens.Micro ((^.))
 import Lens.Micro.Mtl (use, (.=))
 import Lens.Micro.TH (makeLenses)
-import Sound.ProteaAudio
+import Sound.ProteaAudio qualified as PA
 
 data MyState = MyState
   { _currentMs :: Int,
-    _sound :: Maybe Sound,
+    _sound :: Maybe PA.Sound,
     _isPlaying :: Bool
   }
 
@@ -51,7 +51,7 @@ appEvent (VtyEvent ev) =
       s <- use sound
       p <- use isPlaying
 
-      result <- liftIO $ soundUpdate (fromJust s) (not p) 1 1 0 1
+      result <- liftIO $ PA.soundUpdate (fromJust s) p 1 1 0 1
       unless result $ liftIO $ fail "Failed to toggle sound state"
       isPlaying .= not p
 appEvent (AppEvent (Tick s x)) = currentMs .= x >> sound .= Just s
@@ -86,20 +86,20 @@ theApp =
 
 -- Perhaps split this into two bits in the future, one for audio system,
 -- one for sample. How important is sampleDestroy-ing the sample tho
-withSample :: (Sample -> IO ()) -> IO ()
+withSample :: (PA.Sample -> IO ()) -> IO ()
 withSample = bracket aquire release
   where
     aquire = do
-      result <- initAudio 64 48000 1024
+      result <- PA.initAudio 64 48000 1024
       unless result $ fail "Failed to initialize the audio system."
-      sampleFromFile "audio/test.ogg" 1.0
+      PA.sampleFromFile "audio/test.ogg" 1.0
 
     release sample = do
-      result <- sampleDestroy sample
+      result <- PA.sampleDestroy sample
       unless result $ fail "Failed to destroy sample."
-      finishAudio
+      PA.finishAudio
 
-data Tick = Tick Sound Int
+data Tick = Tick PA.Sound Int
 
 msDiff :: SystemTime -> SystemTime -> Int
 msDiff
@@ -110,7 +110,7 @@ msDiff
 soundThread :: BChan Tick -> IO ()
 soundThread bChan = withSample $ \sample -> do
   startTime <- getSystemTime
-  s <- soundPlay sample 1 1 0 1
+  s <- PA.soundPlay sample 1 1 0 1
   forever $ do
     newTime <- getSystemTime
     writeBChan bChan $ Tick s $ msDiff newTime startTime
