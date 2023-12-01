@@ -9,6 +9,7 @@ import Brick
     bg,
     emptyWidget,
     fill,
+    hBox,
     on,
     padAll,
     padBottom,
@@ -16,6 +17,7 @@ import Brick
     padRight,
     padTop,
     str,
+    vBox,
     withAttr,
     withDefAttr,
     (<+>),
@@ -35,7 +37,7 @@ import Control.Monad.IO.Class (liftIO)
 import Data.Maybe (fromJust)
 import Data.Ratio ((%))
 import Data.Time.Clock.System (SystemTime (MkSystemTime, systemNanoseconds, systemSeconds), getSystemTime)
-import GameRow (Orientation (Vertical), RgbColor, RowElement, drawRow)
+import GameRow (Orientation (Horizontal, Vertical), RgbColor, RowElement (Block), drawRow)
 import Graphics.Vty qualified as V
 import Lens.Micro ((^.))
 import Lens.Micro.Mtl (use, (.=))
@@ -56,19 +58,19 @@ bpm = 95
 drawUI :: MyState -> [Widget ()]
 drawUI d =
   [ withDefAttr (attrName "background") $ currentTime <=> isPlaying',
-    withDefAttr (attrName "background") $ C.hCenter $ padLeft (Pad 1) $ foldr (<+>) emptyWidget $ do
+    withDefAttr (attrName "background") $ C.vCenter $ padTop (Pad 1) $ vBox $ do
       color <- [(255, 255, 0), (0, 255, 255), (255, 0, 255), (0, 255, 0)]
-      -- TODO: Get width
-      return $ drawRow' color [],
+      return $ drawRow' color [Block 10 1 (255, 255, 255), Block 12 1 (255, 255, 255), Block 16 1 (255, 255, 255), Block 22 2 (255, 255, 255), Block 25 1 (255, 0, 0), Block 26 1 (0, 0, 255)],
     withDefAttr (attrName "background") (fill ' ')
   ]
   where
     currentTime = withAttr D.dialogAttr $ str $ show $ floor (d ^. currentMs % 60000 * fromIntegral bpm)
     isPlaying' = withAttr D.buttonAttr $ str $ if _isPlaying d then "playing" else "paused"
+    scroll = fromIntegral (d ^. currentMs) / 1000
     drawRow' :: RgbColor -> [RowElement] -> Widget ()
     drawRow' color elements = T.Widget T.Fixed T.Fixed $ do
       context <- T.getContext
-      T.render $ padRight (Pad 1) $ drawRow Vertical (context ^. T.availHeightL) color elements
+      T.render $ padBottom (Pad 1) $ drawRow Horizontal (context ^. T.availWidthL) scroll color elements
 
 appEvent :: BrickEvent () Tick -> T.EventM () MyState ()
 appEvent (VtyEvent ev) =
