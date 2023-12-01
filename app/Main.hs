@@ -55,22 +55,42 @@ makeLenses ''MyState
 bpm :: Int
 bpm = 95
 
+rowOrientation :: Orientation
+rowOrientation = Vertical
+
+rowWidth :: Int
+rowWidth = 3
+
 drawUI :: MyState -> [Widget ()]
 drawUI d =
   [ withDefAttr (attrName "background") $ currentTime <=> isPlaying',
-    withDefAttr (attrName "background") $ C.vCenter $ padTop (Pad 1) $ vBox $ do
-      color <- [(255, 255, 0), (0, 255, 255), (255, 0, 255), (0, 255, 0)]
-      return $ drawRow' color [Block 10 1 (255, 255, 255), Block 12 1 (255, 255, 255), Block 16 1 (255, 255, 255), Block 22 2 (255, 255, 255), Block 25 1 (255, 0, 0), Block 26 1 (0, 0, 255)],
+    withDefAttr (attrName "background") $
+      center $
+        combine $
+          str " " : do
+            color <- [(255, 255, 0), (0, 255, 255), (255, 0, 255), (0, 255, 0)]
+            let row = drawRow' color [Block 10 1 (255, 255, 255), Block 12 1 (255, 255, 255), Block 16 1 (255, 255, 255), Block 22 2 (255, 255, 255), Block 25 1 (255, 0, 0), Block 26 1 (0, 0, 255)]
+            replicate rowWidth row ++ [str " "],
     withDefAttr (attrName "background") (fill ' ')
   ]
   where
     currentTime = withAttr D.dialogAttr $ str $ show $ floor (d ^. currentMs % 60000 * fromIntegral bpm)
     isPlaying' = withAttr D.buttonAttr $ str $ if _isPlaying d then "playing" else "paused"
-    scroll = fromIntegral (d ^. currentMs) / 1000
+    scroll = fromIntegral (d ^. currentMs) / 1000 * 5
+
+    combine = case rowOrientation of
+      Horizontal -> vBox
+      Vertical -> hBox
+    center = case rowOrientation of
+      Horizontal -> C.vCenter
+      Vertical -> C.hCenter
+    getSize = case rowOrientation of
+      Horizontal -> T.availWidthL
+      Vertical -> T.availHeightL
     drawRow' :: RgbColor -> [RowElement] -> Widget ()
     drawRow' color elements = T.Widget T.Fixed T.Fixed $ do
       context <- T.getContext
-      T.render $ padBottom (Pad 1) $ drawRow Horizontal (context ^. T.availWidthL) scroll color elements
+      T.render $ drawRow rowOrientation (context ^. getSize) scroll color elements
 
 appEvent :: BrickEvent () Tick -> T.EventM () MyState ()
 appEvent (VtyEvent ev) =

@@ -34,13 +34,10 @@ blockChar orientation fraction = case orientation of
 
 drawRow :: Orientation -> Int -> Float -> RgbColor -> [RowElement] -> Widget ()
 drawRow orientation size offset rowColor elements = combine $ do
-  i <- [0 .. (fromIntegral size - 1)]
-  let progress = i / fromIntegral size
-  let progress' =
-        case orientation of
-          Horizontal -> 1 - progress
-          Vertical -> progress
-  let background = overlay (progress' * 0.3 + 0.05) (0, 0, 0) rowColor
+  i <- case orientation of
+    Horizontal -> [0 .. (fromIntegral size - 1)]
+    Vertical -> reverse [0 .. (fromIntegral size - 1)]
+  let background = overlay ((1 - i / fromIntegral size) * 0.3 + 0.05) (0, 0, 0) rowColor
   let right = listToMaybe $ do
         Block pos len color <- elements
         if i + offset + 1 > pos && i + offset + 1 <= pos + len
