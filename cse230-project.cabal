@@ -15,9 +15,9 @@ build-type:         Simple
 -- extra-source-files:
 
 common warnings
-    ghc-options: 
+    ghc-options:
         -threaded
-        
+
         -Weverything
         -Wno-implicit-prelude
         -Wno-missing-exported-signatures
@@ -39,7 +39,8 @@ common warnings
 executable cse230-project
     import:           warnings
     main-is:          Main.hs
-    -- other-modules:
+    other-modules:
+        GameRow
     -- other-extensions:
     build-depends:
         base ^>=4.17.2.0,

@@ -2,6 +2,7 @@
 
 module Main (main) where
 
+import Brick (attrName)
 import Brick.AttrMap qualified as A
 import Brick.BChan
 import Brick.Main qualified as M
@@ -13,8 +14,10 @@ import Brick.Types qualified as T
 import Brick.Util (bg, on)
 import Brick.Widgets.Center qualified as C
 import Brick.Widgets.Core
-  ( padAll,
+  ( fill,
+    padAll,
     str,
+    withAttr,
     (<=>),
   )
 import Brick.Widgets.Dialog qualified as D
@@ -25,6 +28,7 @@ import Control.Monad.IO.Class (liftIO)
 import Data.Maybe (fromJust)
 import Data.Ratio ((%))
 import Data.Time.Clock.System (SystemTime (MkSystemTime, systemNanoseconds, systemSeconds), getSystemTime)
+import GameRow (drawRow)
 import Graphics.Vty qualified as V
 import Lens.Micro ((^.))
 import Lens.Micro.Mtl (use, (.=))
@@ -43,10 +47,14 @@ bpm :: Int
 bpm = 95
 
 drawUI :: MyState -> [Widget ()]
-drawUI d = [C.hCenter $ padAll 1 (currentTime <=> isPlaying')]
+drawUI d =
+  [ C.hCenter $ padAll 1 (currentTime <=> isPlaying'),
+    C.vCenter $ drawRow 80 (1, 1, 0) [],
+    withAttr (attrName "background") $ fill ' '
+  ]
   where
-    currentTime = str $ show $ floor (d ^. currentMs % 60000 * fromIntegral bpm)
-    isPlaying' = str $ if _isPlaying d then "playing" else "paused"
+    currentTime = withAttr D.dialogAttr $ str $ show $ floor (d ^. currentMs % 60000 * fromIntegral bpm)
+    isPlaying' = withAttr D.buttonAttr $ str $ if _isPlaying d then "playing" else "paused"
 
 appEvent :: BrickEvent () Tick -> T.EventM () MyState ()
 appEvent (VtyEvent ev) =
@@ -78,7 +86,8 @@ theMap =
     V.defAttr
     [ (D.dialogAttr, V.white `on` V.blue),
       (D.buttonAttr, V.black `on` V.white),
-      (D.buttonSelectedAttr, bg V.yellow)
+      (D.buttonSelectedAttr, bg V.yellow),
+      (attrName "background", V.black `on` V.black)
     ]
 
 theApp :: M.App MyState Tick ()
