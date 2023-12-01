@@ -22,6 +22,7 @@ import Control.Exception (bracket)
 import Control.Monad
 import Control.Monad.IO.Class (liftIO)
 import Data.Maybe (fromJust)
+import Data.Ratio ((%))
 import Data.Time.Clock.System (SystemTime (MkSystemTime, systemNanoseconds, systemSeconds), getSystemTime)
 import Graphics.Vty qualified as V
 import Lens.Micro ((^.))
@@ -37,10 +38,13 @@ data MyState = MyState
 
 makeLenses ''MyState
 
+bpm :: Int
+bpm = 95
+
 drawUI :: MyState -> [Widget ()]
 drawUI d = [ui]
   where
-    ui = C.hCenter $ padAll 1 $ str $ show (d ^. currentMs)
+    ui = C.hCenter $ padAll 1 $ str $ show $ floor (d ^. currentMs % 60000 * fromIntegral bpm)
 
 appEvent :: BrickEvent () Tick -> T.EventM () MyState ()
 appEvent (VtyEvent ev) =
@@ -114,7 +118,7 @@ soundThread bChan = withSample $ \sample -> do
   forever $ do
     newTime <- getSystemTime
     writeBChan bChan $ Tick s $ msDiff newTime startTime
-    threadDelay 100000
+    threadDelay 10000
 
 main :: IO ()
 main = do
