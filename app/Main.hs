@@ -35,7 +35,6 @@ import Control.Exception (bracket)
 import Control.Monad
 import Control.Monad.IO.Class (liftIO)
 import Data.Maybe (fromJust)
-import Data.Ratio ((%))
 import Data.Time.Clock.System (SystemTime (MkSystemTime, systemNanoseconds, systemSeconds), getSystemTime)
 import GameRow (Orientation (Horizontal, Vertical), RgbColor, RowElement (Block), drawRow)
 import Graphics.Vty qualified as V
@@ -45,7 +44,7 @@ import Lens.Micro.TH (makeLenses)
 import Sound.ProteaAudio qualified as PA
 
 data MyState = MyState
-  { _currentMs :: Int,
+  { _currentTime :: Double, -- in seconds
     _sound :: Maybe PA.Sound,
     _isPlaying :: Bool
   }
@@ -53,7 +52,7 @@ data MyState = MyState
 makeLenses ''MyState
 
 bpm :: Int
-bpm = 95
+bpm = 85
 
 rowOrientation :: Orientation
 rowOrientation = Vertical
@@ -63,7 +62,7 @@ rowWidth = 3
 
 drawUI :: MyState -> [Widget ()]
 drawUI d =
-  [ withDefAttr (attrName "background") $ currentTime <=> isPlaying',
+  [ withDefAttr (attrName "background") $ currentBeat' <=> isPlaying',
     withDefAttr (attrName "background") $
       center $
         combine $
@@ -74,9 +73,10 @@ drawUI d =
     withDefAttr (attrName "background") (fill ' ')
   ]
   where
-    currentTime = withAttr D.dialogAttr $ str $ show $ floor (d ^. currentMs % 60000 * fromIntegral bpm)
+    currentBeat = floor (d ^. currentTime / 60 * fromIntegral bpm) :: Int
+    currentBeat' = withAttr D.dialogAttr $ str $ show currentBeat
     isPlaying' = withAttr D.buttonAttr $ str $ if _isPlaying d then "playing" else "paused"
-    scroll = fromIntegral (d ^. currentMs) / 1000 * 5
+    scroll = d ^. currentTime * 100
 
     combine = case rowOrientation of
       Horizontal -> vBox
@@ -90,7 +90,7 @@ drawUI d =
     drawRow' :: RgbColor -> [RowElement] -> Widget ()
     drawRow' color elements = T.Widget T.Fixed T.Fixed $ do
       context <- T.getContext
-      T.render $ drawRow rowOrientation (context ^. getSize) scroll color elements
+      T.render $ drawRow rowOrientation (context ^. getSize) (realToFrac scroll) color elements
 
 appEvent :: BrickEvent () Tick -> T.EventM () MyState ()
 appEvent (VtyEvent ev) =
@@ -105,13 +105,13 @@ appEvent (VtyEvent ev) =
       unless result $ liftIO $ fail "Failed to toggle sound state"
       isPlaying .= not p
     _ -> return ()
-appEvent (AppEvent (Tick s x)) = currentMs .= x >> sound .= Just s
+appEvent (AppEvent (Tick s x)) = currentTime .= x >> sound .= Just s
 appEvent _ = return ()
 
 initialState :: MyState
 initialState =
   MyState
-    { _currentMs = 0,
+    { _currentTime = 0,
       _sound = Nothing,
       _isPlaying = True
     }
@@ -144,29 +144,25 @@ withSample = bracket aquire release
     aquire = do
       result <- PA.initAudio 64 48000 1024
       unless result $ fail "Failed to initialize the audio system."
-      PA.sampleFromFile "audio/test.ogg" 1.0
+      PA.sampleFromFile "audio/pigstep.mp3" 1.0
 
     release sample = do
       result <- PA.sampleDestroy sample
       unless result $ fail "Failed to destroy sample."
       PA.finishAudio
 
-data Tick = Tick PA.Sound Int
+data Tick = Tick PA.Sound Double
 
-msDiff :: SystemTime -> SystemTime -> Int
-msDiff
-  (MkSystemTime {systemSeconds = as, systemNanoseconds = an})
-  (MkSystemTime {systemSeconds = bs, systemNanoseconds = bn}) =
-    (fromIntegral as - fromIntegral bs) * 1000 + (fromIntegral an - fromIntegral bn) `div` 1000000
+toSeconds :: SystemTime -> Double
+toSeconds (MkSystemTime {systemSeconds = s, systemNanoseconds = n}) = fromIntegral s + fromIntegral n * 1_000_000
 
 soundThread :: BChan Tick -> IO ()
 soundThread bChan = withSample $ \sample -> do
-  startTime <- getSystemTime
   s <- PA.soundPlay sample 1 1 0 1
   forever $ do
-    newTime <- getSystemTime
-    writeBChan bChan $ Tick s $ msDiff newTime startTime
-    threadDelay 10000
+    newTime <- PA.soundPos s
+    writeBChan bChan $ Tick s newTime
+    threadDelay 10_000
 
 main :: IO ()
 main = do
