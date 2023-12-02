@@ -60,3 +60,23 @@ There are many challenges to making the game itself. Our goal is to create a min
 [osu]: https://en.wikipedia.org/wiki/Osu!
 [quaver]: https://quavergame.com/
 [ddr]: https://en.wikipedia.org/wiki/Dance_Dance_Revolution
+
+## Milestone 2: Updates
+
+<!-- Prompt: What is the architecture of your application (the key components)? -->
+
+Here is an overview of our application's architecture.
+
+![Architecture diagram](./docs/architecture.png)
+
+<!-- Prompt: What challenges (if any) did you have so far and how did you solve them? -->
+
+Unsurprisingly, audio is a bit finicky. There appears to be a delay when playing/pausing the audio, and there's no way to keep the game in sync with the audio unless we modify the [`proteaaudio`][proteaaudio] library itself.
+
+Another curiosity we ran into was that terminal characters are narrow and tall, and terminals are also usually in a landscape orientation. This means that there's a lot of column space to work with, but not as much row space. We had to consider whether it would be better to make our rhythm game's tracks horizontal to take advantage of more column space.
+
+<!-- Prompt: Do you expect to meet your goals until the deadline? -->
+
+We will meet our goals before the deadline.
+
+<!-- Prompt: If not, how will you modify your goals? -->
