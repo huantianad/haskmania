@@ -14,7 +14,7 @@ build-type:         Simple
 -- extra-doc-files:    CHANGELOG.md
 -- extra-source-files:
 
-common warnings
+common options
     ghc-options:
         -threaded
 
@@ -37,10 +37,11 @@ common warnings
         TemplateHaskell
 
 executable cse230-project
-    import:           warnings
+    import:           options
     main-is:          Main.hs
     other-modules:
-        GameRow
+        HaskMania.GameRow
+        HaskMania.LinearRegression
     -- other-extensions:
     build-depends:
         base ^>=4.17.2.0,
@@ -52,5 +53,8 @@ executable cse230-project
         microlens-th ^>= 0.4.3.14,
         microlens-mtl ^>= 0.2.0.3,
         time ^>= 1.12.2,
+        mtl ^>= 2.2.2,
+        -- statistics-linreg ^>= 0.3,
+        -- vector ^>= 0.13.1.0,
     hs-source-dirs:   app
     default-language: GHC2021

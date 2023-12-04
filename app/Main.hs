@@ -36,8 +36,8 @@ import Control.Monad
 import Control.Monad.IO.Class (liftIO)
 import Data.Maybe (fromJust)
 import Data.Time.Clock.System (SystemTime (MkSystemTime, systemNanoseconds, systemSeconds), getSystemTime)
-import GameRow (Orientation (Horizontal, Vertical), RgbColor, RowElement (Block), drawRow)
 import Graphics.Vty qualified as V
+import HaskMania.GameRow (Orientation (Horizontal, Vertical), RgbColor, RowElement (Block), drawRow)
 import Lens.Micro ((^.))
 import Lens.Micro.Mtl (use, (.=))
 import Lens.Micro.TH (makeLenses)
@@ -138,13 +138,13 @@ theApp =
 
 -- Perhaps split this into two bits in the future, one for audio system,
 -- one for sample. How important is sampleDestroy-ing the sample tho
-withSample :: (PA.Sample -> IO ()) -> IO ()
-withSample = bracket aquire release
+withSample :: String -> (PA.Sample -> IO ()) -> IO ()
+withSample filePath = bracket aquire release
   where
     aquire = do
       result <- PA.initAudio 64 48000 1024
       unless result $ fail "Failed to initialize the audio system."
-      PA.sampleFromFile "audio/pigstep.mp3" 1.0
+      PA.sampleFromFile filePath 1.0
 
     release sample = do
       result <- PA.sampleDestroy sample
@@ -153,11 +153,8 @@ withSample = bracket aquire release
 
 data Tick = Tick PA.Sound Double
 
-toSeconds :: SystemTime -> Double
-toSeconds (MkSystemTime {systemSeconds = s, systemNanoseconds = n}) = fromIntegral s + fromIntegral n * 1_000_000
-
 soundThread :: BChan Tick -> IO ()
-soundThread bChan = withSample $ \sample -> do
+soundThread bChan = withSample "audio/pigstep.mp3" $ \sample -> do
   s <- PA.soundPlay sample 1 1 0 1
   forever $ do
     newTime <- PA.soundPos s

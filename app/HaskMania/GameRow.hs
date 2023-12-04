@@ -1,4 +1,4 @@
-module GameRow (RowElement (Block), drawRow, RgbColor, Orientation (Vertical, Horizontal)) where
+module HaskMania.GameRow (RowElement (Block), drawRow, RgbColor, Orientation (Vertical, Horizontal)) where
 
 import Brick (Widget, hBox, modifyDefAttr, str, vBox)
 import Data.Maybe (fromMaybe, listToMaybe)
