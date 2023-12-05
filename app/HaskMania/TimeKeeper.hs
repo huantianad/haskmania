@@ -1,7 +1,10 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module HaskMania.TimeKeeper (initTimeKeeper, updateTime, getTime) where
+module HaskMania.TimeKeeper (TimeKeeper, initTimeKeeper, updateTimeM, getTimeM) where
 
+import Control.Monad.Cont (liftIO)
+import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.State.Class (MonadState (..))
 import Data.Time.Clock.System (SystemTime (..), getSystemTime)
 import Sound.ProteaAudio (Sound, soundPos)
 
@@ -45,6 +48,9 @@ updateTime model = do
       then model {points = []}
       else addPoint model (x, y)
 
+updateTimeM :: (MonadState TimeKeeper m, MonadIO m) => m ()
+updateTimeM = get >>= (liftIO . updateTime) >>= put
+
 getTime :: TimeKeeper -> IO (Double, TimeKeeper)
 getTime model@TimeKeeper {..} = do
   x <- toSeconds <$> getSystemTime
@@ -54,6 +60,13 @@ getTime model@TimeKeeper {..} = do
   if (time < previouslyReturnedTime) || paused
     then return (previouslyReturnedTime, model)
     else return (time, model {previouslyReturnedTime = time})
+
+getTimeM :: (MonadState TimeKeeper m, MonadIO m) => m Double
+getTimeM = do
+  tk <- get
+  (time, tk') <- liftIO $ getTime tk
+  put tk'
+  return time
 
 -- Once the number of points in the regression reaches this limit,
 -- older points will be dropped and replaced with the newly added points.

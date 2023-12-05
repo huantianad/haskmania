@@ -34,18 +34,18 @@ import Control.Concurrent (forkIO, threadDelay)
 import Control.Exception (bracket)
 import Control.Monad
 import Control.Monad.IO.Class (liftIO)
-import Data.Maybe (fromJust)
-import Data.Time.Clock.System (SystemTime (MkSystemTime, systemNanoseconds, systemSeconds), getSystemTime)
 import Graphics.Vty qualified as V
 import HaskMania.GameRow (Orientation (Horizontal, Vertical), RgbColor, RowElement (Block), drawRow)
+import HaskMania.TimeKeeper (TimeKeeper, getTimeM, initTimeKeeper, updateTimeM)
 import Lens.Micro ((^.))
-import Lens.Micro.Mtl (use, (.=))
+import Lens.Micro.Mtl (use, zoom, (.=))
 import Lens.Micro.TH (makeLenses)
 import Sound.ProteaAudio qualified as PA
 
 data MyState = MyState
   { _currentTime :: Double, -- in seconds
-    _sound :: Maybe PA.Sound,
+    _sound :: PA.Sound,
+    _timeKeeper :: TimeKeeper,
     _isPlaying :: Bool
   }
 
@@ -62,15 +62,15 @@ rowWidth = 3
 
 drawUI :: MyState -> [Widget ()]
 drawUI d =
-  [ withDefAttr (attrName "background") $ currentBeat' <=> isPlaying',
-    withDefAttr (attrName "background") $
-      center $
-        combine $
-          str " " : do
-            color <- [(255, 255, 0), (0, 255, 255), (255, 0, 255), (0, 255, 0)]
-            let row = drawRow' color [Block 10 1 (255, 255, 255), Block 12 1 (255, 255, 255), Block 16 1 (255, 255, 255), Block 22 2 (255, 255, 255), Block 25 1 (255, 0, 0), Block 26 1 (0, 0, 255)]
-            replicate rowWidth row ++ [str " "],
-    withDefAttr (attrName "background") (fill ' ')
+  [ withDefAttr (attrName "background") $ currentBeat' <=> isPlaying'
+  -- withDefAttr (attrName "background") $
+  --   center $
+  --     combine $
+  --       str " " : do
+  --         color <- [(255, 255, 0), (0, 255, 255), (255, 0, 255), (0, 255, 0)]
+  --         let row = drawRow' color [Block 10 1 (255, 255, 255), Block 12 1 (255, 255, 255), Block 16 1 (255, 255, 255), Block 22 2 (255, 255, 255), Block 25 1 (255, 0, 0), Block 26 1 (0, 0, 255)]
+  --         replicate rowWidth row ++ [str " "],
+  -- withDefAttr (attrName "background") (fill ' ')
   ]
   where
     currentBeat = floor (d ^. currentTime / 60 * fromIntegral bpm) :: Int
@@ -101,18 +101,23 @@ appEvent (VtyEvent ev) =
       s <- use sound
       p <- use isPlaying
 
-      result <- liftIO $ PA.soundUpdate (fromJust s) p 1 1 0 1
+      result <- liftIO $ PA.soundUpdate s p 1 1 0 1
       unless result $ liftIO $ fail "Failed to toggle sound state"
       isPlaying .= not p
     _ -> return ()
-appEvent (AppEvent (Tick s x)) = currentTime .= x >> sound .= Just s
+appEvent (AppEvent Tick) = do
+  zoom timeKeeper updateTimeM
+  zoom timeKeeper getTimeM >>= (currentTime .=)
+  time <- use currentTime
+  liftIO $ print time
 appEvent _ = return ()
 
-initialState :: MyState
-initialState =
+initialState :: PA.Sound -> TimeKeeper -> MyState
+initialState s tk =
   MyState
     { _currentTime = 0,
-      _sound = Nothing,
+      _sound = s,
+      _timeKeeper = tk,
       _isPlaying = True
     }
 
@@ -151,19 +156,21 @@ withSample filePath = bracket aquire release
       unless result $ fail "Failed to destroy sample."
       PA.finishAudio
 
-data Tick = Tick PA.Sound Double
+data Tick = Tick
 
 soundThread :: BChan Tick -> IO ()
-soundThread bChan = withSample "audio/pigstep.mp3" $ \sample -> do
-  s <- PA.soundPlay sample 1 1 0 1
+soundThread bChan = do
   forever $ do
-    newTime <- PA.soundPos s
-    writeBChan bChan $ Tick s newTime
+    writeBChan bChan Tick
     threadDelay 10_000
 
 main :: IO ()
-main = do
+main = withSample "audio/pigstep.mp3" $ \sample -> do
+  s <- PA.soundPlay sample 1 1 0 1
+  tk <- initTimeKeeper s
+
   bChan <- newBChan 10
   void $ forkIO $ soundThread bChan
 
-  void $ M.customMainWithDefaultVty (Just bChan) theApp initialState
+  let state = initialState s tk
+  void $ M.customMainWithDefaultVty (Just bChan) theApp state
