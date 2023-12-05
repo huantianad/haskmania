@@ -41,7 +41,7 @@ executable cse230-project
     main-is:          Main.hs
     other-modules:
         HaskMania.GameRow
-        HaskMania.LinearRegression
+        HaskMania.TimeKeeper
     -- other-extensions:
     build-depends:
         base ^>=4.17.2.0,

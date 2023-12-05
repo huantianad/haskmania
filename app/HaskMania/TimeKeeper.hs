@@ -1,43 +1,55 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module HaskMania.LinearRegression (initRegression, updateTime, getTime) where
+module HaskMania.TimeKeeper (initTimeKeeper, updateTime, getTime) where
 
 import Data.Time.Clock.System (SystemTime (..), getSystemTime)
 import Sound.ProteaAudio (Sound, soundPos)
 
-data RegressionModel = RegressionModel
+data TimeKeeper = TimeKeeper
   { points :: [(Double, Double)],
     slope :: Double,
     intercept :: Double,
-    previouslyReturnedTime :: Double
+    previouslyReturnedTime :: Double,
+    sound :: Sound
   }
 
-initRegression :: Sound -> IO RegressionModel
-initRegression = updateTime empty
-  where
-    empty =
-      RegressionModel
-        { points = [],
-          slope = 0,
-          intercept = 0,
-          previouslyReturnedTime = 0
-        }
-
-updateTime :: RegressionModel -> Sound -> IO RegressionModel
-updateTime model sound = do
-  let paused = False -- TODO: Get paused status from sound instead
-  x <- toSeconds <$> getSystemTime
-  y <- soundPos sound
-  return $ addPoint model (x, y) paused
+-- TODO: Implement this stub
+soundPaused :: Sound -> IO Bool
+soundPaused _ = return False
 
 toSeconds :: SystemTime -> Double
 toSeconds (MkSystemTime {systemSeconds = s, systemNanoseconds = n}) = fromIntegral s + fromIntegral n * 1_000_000
 
-getTime :: RegressionModel -> Sound -> IO (Double, RegressionModel)
-getTime model@RegressionModel {..} sound = do
-  let paused = False -- TODO: Get paused status from sound instead
+initTimeKeeper :: Sound -> IO TimeKeeper
+initTimeKeeper sound =
+  updateTime
+    TimeKeeper
+      { points = [],
+        slope = 0,
+        intercept = 0,
+        previouslyReturnedTime = 0,
+        sound = sound
+      }
+
+updateTime :: TimeKeeper -> IO TimeKeeper
+updateTime model = do
+  x <- toSeconds <$> getSystemTime
+  y <- soundPos $ sound model
+
+  paused <- soundPaused $ sound model
+
+  -- If the audio is paused, this invalidates our previous points
+  -- Remove all of them so we can restart from scratch.
+  return $
+    if paused
+      then model {points = []}
+      else addPoint model (x, y)
+
+getTime :: TimeKeeper -> IO (Double, TimeKeeper)
+getTime model@TimeKeeper {..} = do
   x <- toSeconds <$> getSystemTime
   let time = x * slope + intercept
+  paused <- soundPaused sound
 
   if (time < previouslyReturnedTime) || paused
     then return (previouslyReturnedTime, model)
@@ -48,14 +60,8 @@ getTime model@RegressionModel {..} sound = do
 limit :: Int
 limit = 20
 
-addPoint ::
-  RegressionModel ->
-  (Double, Double) ->
-  Bool ->
-  RegressionModel
--- Clear points list if game is paused
-addPoint model _ True = model {points = []}
-addPoint model@RegressionModel {..} point@(_, y) False =
+addPoint :: TimeKeeper -> (Double, Double) -> TimeKeeper
+addPoint model@TimeKeeper {..} point@(_, y) =
   -- Don't add multiple system times for the same audio time
   if any (\p -> snd p == y) points
     then model
@@ -67,15 +73,15 @@ addPoint model@RegressionModel {..} point@(_, y) False =
         then point : init points
         else point : points
 
-updateRegression :: RegressionModel -> RegressionModel
-updateRegression model@RegressionModel {..} =
-  if length points == 1
-    then
+updateRegression :: TimeKeeper -> TimeKeeper
+updateRegression model@TimeKeeper {..} =
+  case points of
+    [point] ->
       model
-        { slope = 0,
-          intercept = fst $ head points
+        { slope = 1,
+          intercept = snd point - fst point
         }
-    else
+    _ ->
       model
         { slope = slope',
           intercept = yMean - slope' * xMean
