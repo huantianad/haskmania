@@ -3,5 +3,5 @@ packages: .
 source-repository-package
     type: git
     location: https://github.com/huantianad/proteaaudio.git
-    tag: 625a1eb1219b9aefd70fd5d89938b7e3b033b517
+    tag: f8cd6554c33462ff4b48058b2de6a32baf24c495
     subdir: proteaaudio

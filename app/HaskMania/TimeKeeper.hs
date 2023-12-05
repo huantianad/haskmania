@@ -6,40 +6,44 @@ import Control.Monad.Cont (liftIO)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.State.Class (MonadState (..))
 import Data.Time.Clock.System (SystemTime (..), getSystemTime)
-import Sound.ProteaAudio (Sound, soundPos)
+import Sound.ProteaAudio (Sound, soundPaused, soundPos)
 
 data TimeKeeper = TimeKeeper
   { points :: [(Double, Double)],
     slope :: Double,
     intercept :: Double,
+    startTime :: SystemTime,
     previouslyReturnedTime :: Double,
     sound :: Sound
   }
 
--- TODO: Implement this stub
-soundPaused :: Sound -> IO Bool
-soundPaused _ = return False
+instance Show TimeKeeper where
+  show tk = show $ points tk
 
-toSeconds :: SystemTime -> Double
-toSeconds (MkSystemTime {systemSeconds = s, systemNanoseconds = n}) = fromIntegral s + fromIntegral n * 1_000_000
+secondsSince :: SystemTime -> IO Double
+secondsSince (MkSystemTime {systemSeconds = s, systemNanoseconds = n}) = do
+  (MkSystemTime {systemSeconds = ns, systemNanoseconds = nn}) <- getSystemTime
+  return $ (fromIntegral ns - fromIntegral s) + ((fromIntegral nn - fromIntegral n) / 1_000_000_000)
 
 initTimeKeeper :: Sound -> IO TimeKeeper
-initTimeKeeper sound =
+initTimeKeeper sound = do
+  now <- getSystemTime
   updateTime
     TimeKeeper
       { points = [],
         slope = 0,
         intercept = 0,
+        startTime = now,
         previouslyReturnedTime = 0,
         sound = sound
       }
 
 updateTime :: TimeKeeper -> IO TimeKeeper
-updateTime model = do
-  x <- toSeconds <$> getSystemTime
-  y <- soundPos $ sound model
+updateTime model@TimeKeeper {..} = do
+  x <- secondsSince startTime
+  y <- soundPos sound
 
-  paused <- soundPaused $ sound model
+  paused <- soundPaused sound
 
   -- If the audio is paused, this invalidates our previous points
   -- Remove all of them so we can restart from scratch.
@@ -53,7 +57,7 @@ updateTimeM = get >>= (liftIO . updateTime) >>= put
 
 getTime :: TimeKeeper -> IO (Double, TimeKeeper)
 getTime model@TimeKeeper {..} = do
-  x <- toSeconds <$> getSystemTime
+  x <- secondsSince startTime
   let time = x * slope + intercept
   paused <- soundPaused sound
 
@@ -71,7 +75,7 @@ getTimeM = do
 -- Once the number of points in the regression reaches this limit,
 -- older points will be dropped and replaced with the newly added points.
 limit :: Int
-limit = 20
+limit = 200
 
 addPoint :: TimeKeeper -> (Double, Double) -> TimeKeeper
 addPoint model@TimeKeeper {..} point@(_, y) =

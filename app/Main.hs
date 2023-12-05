@@ -45,8 +45,7 @@ import Sound.ProteaAudio qualified as PA
 data MyState = MyState
   { _currentTime :: Double, -- in seconds
     _sound :: PA.Sound,
-    _timeKeeper :: TimeKeeper,
-    _isPlaying :: Bool
+    _timeKeeper :: TimeKeeper
   }
 
 makeLenses ''MyState
@@ -62,21 +61,22 @@ rowWidth = 3
 
 drawUI :: MyState -> [Widget ()]
 drawUI d =
-  [ withDefAttr (attrName "background") $ currentBeat' <=> isPlaying'
-  -- withDefAttr (attrName "background") $
-  --   center $
-  --     combine $
-  --       str " " : do
-  --         color <- [(255, 255, 0), (0, 255, 255), (255, 0, 255), (0, 255, 0)]
-  --         let row = drawRow' color [Block 10 1 (255, 255, 255), Block 12 1 (255, 255, 255), Block 16 1 (255, 255, 255), Block 22 2 (255, 255, 255), Block 25 1 (255, 0, 0), Block 26 1 (0, 0, 255)]
-  --         replicate rowWidth row ++ [str " "],
-  -- withDefAttr (attrName "background") (fill ' ')
+  [ withDefAttr (attrName "background") $ currentBeat' <=> a,
+    withDefAttr (attrName "background") $
+      center $
+        combine $
+          str " " : do
+            color <- [(255, 255, 0), (0, 255, 255), (255, 0, 255), (0, 255, 0)]
+            let row = drawRow' color [Block 10 1 (255, 255, 255), Block 12 1 (255, 255, 255), Block 16 1 (255, 255, 255), Block 22 2 (255, 255, 255), Block 25 1 (255, 0, 0), Block 26 1 (0, 0, 255)]
+            replicate rowWidth row ++ [str " "],
+    withDefAttr (attrName "background") (fill ' ')
   ]
   where
     currentBeat = floor (d ^. currentTime / 60 * fromIntegral bpm) :: Int
     currentBeat' = withAttr D.dialogAttr $ str $ show currentBeat
-    isPlaying' = withAttr D.buttonAttr $ str $ if _isPlaying d then "playing" else "paused"
-    scroll = d ^. currentTime * 100
+    a = withAttr D.dialogAttr $ str $ show $ d ^. timeKeeper
+
+    scroll = d ^. currentTime * 5
 
     combine = case rowOrientation of
       Horizontal -> vBox
@@ -87,6 +87,7 @@ drawUI d =
     getSize = case rowOrientation of
       Horizontal -> T.availWidthL
       Vertical -> T.availHeightL
+
     drawRow' :: RgbColor -> [RowElement] -> Widget ()
     drawRow' color elements = T.Widget T.Fixed T.Fixed $ do
       context <- T.getContext
@@ -99,17 +100,13 @@ appEvent (VtyEvent ev) =
     V.EvKey V.KEnter [] -> M.halt
     V.EvKey _ _ -> do
       s <- use sound
-      p <- use isPlaying
-
-      result <- liftIO $ PA.soundUpdate s p 1 1 0 1
+      isPaused <- liftIO $ PA.soundPaused s
+      result <- liftIO $ PA.soundUpdate s (not isPaused) 1 1 0 1
       unless result $ liftIO $ fail "Failed to toggle sound state"
-      isPlaying .= not p
     _ -> return ()
 appEvent (AppEvent Tick) = do
   zoom timeKeeper updateTimeM
   zoom timeKeeper getTimeM >>= (currentTime .=)
-  time <- use currentTime
-  liftIO $ print time
 appEvent _ = return ()
 
 initialState :: PA.Sound -> TimeKeeper -> MyState
@@ -117,8 +114,7 @@ initialState s tk =
   MyState
     { _currentTime = 0,
       _sound = s,
-      _timeKeeper = tk,
-      _isPlaying = True
+      _timeKeeper = tk
     }
 
 theMap :: A.AttrMap
