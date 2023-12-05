@@ -6,8 +6,8 @@ import Graphics.Vty (Color (RGBColor), withBackColor, withForeColor)
 
 type RgbColor = (Float, Float, Float)
 
--- Block: position length color
-data RowElement = Block Float Float RgbColor
+-- Block: color length position
+data RowElement = Block RgbColor Float Float
 
 data Orientation = Vertical | Horizontal
 
@@ -16,7 +16,7 @@ toRGBColor (r, g, b) = RGBColor (floor r) (floor g) (floor b)
 
 -- Applies a transparent color on top of a base color
 overlay :: Float -> RgbColor -> RgbColor -> RgbColor
-overlay alpha (r, g, b) (r', g', b') =
+overlay alpha (r', g', b') (r, g, b) =
   ( r * (1 - alpha) + r' * alpha,
     g * (1 - alpha) + g' * alpha,
     b * (1 - alpha) + b' * alpha
@@ -37,14 +37,16 @@ drawRow orientation size offset rowColor elements = combine $ do
   i <- case orientation of
     Horizontal -> [0 .. (fromIntegral size - 1)]
     Vertical -> reverse [0 .. (fromIntegral size - 1)]
-  let background = overlay ((1 - i / fromIntegral size) * 0.3 + 0.05) (0, 0, 0) rowColor
+  let background =
+        overlay (if i == 1 then 0.5 else 0) (255, 255, 255) $
+          overlay ((1 - i / fromIntegral size) * 0.3 + 0.05) rowColor (0, 0, 0)
   let right = listToMaybe $ do
-        Block pos len color <- elements
+        Block color len pos <- elements
         if i + offset + 1 > pos && i + offset + 1 <= pos + len
           then return (max 0 (pos - (i + offset)), color)
           else []
   let left = listToMaybe $ do
-        Block pos len color <- elements
+        Block color len pos <- elements
         if i + offset >= pos + len - 1 && i + offset < pos + len
           then return (pos + len - (i + offset), color)
           else []

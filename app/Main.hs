@@ -3,24 +3,16 @@
 module Main (main) where
 
 import Brick
-  ( Padding (Pad),
-    Widget,
+  ( Widget,
     attrName,
     bg,
-    emptyWidget,
     fill,
     hBox,
     on,
-    padAll,
-    padBottom,
-    padLeft,
-    padRight,
-    padTop,
     str,
     vBox,
     withAttr,
     withDefAttr,
-    (<+>),
     (<=>),
   )
 import Brick.AttrMap qualified as A
@@ -67,16 +59,22 @@ drawUI d =
         combine $
           str " " : do
             color <- [(255, 255, 0), (0, 255, 255), (255, 0, 255), (0, 255, 0)]
-            let row = drawRow' color [Block 10 1 (255, 255, 255), Block 12 1 (255, 255, 255), Block 16 1 (255, 255, 255), Block 22 2 (255, 255, 255), Block 25 1 (255, 0, 0), Block 26 1 (0, 0, 255)]
+            blocks <-
+              [ [Block (255, 255, 255) 1 10, Block (255, 255, 255) 1 12, Block (255, 255, 255) 1 16, Block (255, 255, 255) 2 22, Block (255, 0, 0) 1 25, Block (0, 0, 255) 1 26],
+                [],
+                [], -- map (\i -> Block (255, 0, 255) 1 (i * 2)) [0 ..],
+                []
+                ]
+            let row = drawRow' color blocks
             replicate rowWidth row ++ [str " "],
     withDefAttr (attrName "background") (fill ' ')
   ]
   where
-    currentBeat = floor (d ^. currentTime / 60 * fromIntegral bpm) :: Int
-    currentBeat' = withAttr D.dialogAttr $ str $ show currentBeat
+    currentBeat = d ^. currentTime / 60 * fromIntegral bpm
+    currentBeat' = withAttr D.dialogAttr $ str $ show (floor currentBeat)
     a = withAttr D.dialogAttr $ str $ show $ d ^. timeKeeper
-
-    scroll = d ^. currentTime * 5
+    -- Two units per beat
+    scroll = currentBeat * 2
 
     combine = case rowOrientation of
       Horizontal -> vBox
