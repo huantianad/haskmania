@@ -26,6 +26,7 @@ import Control.Concurrent (forkIO, threadDelay)
 import Control.Exception (bracket)
 import Control.Monad
 import Control.Monad.IO.Class (liftIO)
+import Data.Time.Clock.System (SystemTime (MkSystemTime, systemNanoseconds, systemSeconds), getSystemTime)
 import Graphics.Vty qualified as V
 import HaskMania.GameRow (Orientation (Horizontal, Vertical), RgbColor, RowElement (Block), drawRow)
 import HaskMania.TimeKeeper (TimeKeeper, getTimeM, initTimeKeeper, updateTimeM)
@@ -58,12 +59,11 @@ drawUI d =
       center $
         combine $
           str " " : do
-            color <- [(255, 255, 0), (0, 255, 255), (255, 0, 255), (0, 255, 0)]
-            blocks <-
-              [ [Block (255, 255, 255) 1 10, Block (255, 255, 255) 1 12, Block (255, 255, 255) 1 16, Block (255, 255, 255) 2 22, Block (255, 0, 0) 1 25, Block (0, 0, 255) 1 26],
-                [],
-                [], -- map (\i -> Block (255, 0, 255) 1 (i * 2)) [0 ..],
-                []
+            (color, blocks) <-
+              [ ((255, 255, 0), [Block (255, 255, 255) 1 10, Block (255, 255, 255) 1 12, Block (255, 255, 255) 1 16, Block (255, 255, 255) 2 22, Block (255, 0, 0) 1 25, Block (0, 0, 255) 1 26]),
+                ((0, 255, 255), map (\i -> Block (0, 255, 255) 1 (i * 2)) [0 .. 30]),
+                ((255, 0, 255), []),
+                ((0, 255, 0), [])
                 ]
             let row = drawRow' color blocks
             replicate rowWidth row ++ [str " "],
@@ -102,7 +102,7 @@ appEvent (VtyEvent ev) =
       result <- liftIO $ PA.soundUpdate s (not isPaused) 1 1 0 1
       unless result $ liftIO $ fail "Failed to toggle sound state"
     _ -> return ()
-appEvent (AppEvent Tick) = do
+appEvent (AppEvent (Tick _)) = do
   zoom timeKeeper updateTimeM
   zoom timeKeeper getTimeM >>= (currentTime .=)
 appEvent _ = return ()
@@ -150,13 +150,24 @@ withSample filePath = bracket aquire release
       unless result $ fail "Failed to destroy sample."
       PA.finishAudio
 
-data Tick = Tick
+data Tick = Tick Double
 
-soundThread :: BChan Tick -> IO ()
-soundThread bChan = do
+msDiff :: SystemTime -> SystemTime -> Int
+msDiff
+  (MkSystemTime {systemSeconds = as, systemNanoseconds = an})
+  (MkSystemTime {systemSeconds = bs, systemNanoseconds = bn}) =
+    (fromIntegral as - fromIntegral bs) * 1000 + (fromIntegral an - fromIntegral bn) `div` 1000000
+
+soundThread :: PA.Sound -> BChan Tick -> IO ()
+soundThread s bChan = do
+  startTime <- getSystemTime
   forever $ do
-    writeBChan bChan Tick
-    threadDelay 10_000
+    -- If you swap with the below, it's a lot slower. So something about soundPos is slow
+    -- newTime <- PA.soundPos s
+    -- writeBChan bChan $ Tick newTime
+    newTime <- getSystemTime
+    writeBChan bChan $ Tick $ fromIntegral (msDiff newTime startTime) / 1000
+    threadDelay 1_000
 
 main :: IO ()
 main = withSample "audio/pigstep.mp3" $ \sample -> do
@@ -164,7 +175,7 @@ main = withSample "audio/pigstep.mp3" $ \sample -> do
   tk <- initTimeKeeper s
 
   bChan <- newBChan 10
-  void $ forkIO $ soundThread bChan
+  void $ forkIO $ soundThread s bChan
 
   let state = initialState s tk
   void $ M.customMainWithDefaultVty (Just bChan) theApp state

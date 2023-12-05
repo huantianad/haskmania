@@ -1,7 +1,6 @@
 module HaskMania.GameRow (RowElement (Block), drawRow, RgbColor, Orientation (Vertical, Horizontal)) where
 
 import Brick (Widget, hBox, modifyDefAttr, str, vBox)
-import Data.Maybe (fromMaybe, listToMaybe)
 import Graphics.Vty (Color (RGBColor), withBackColor, withForeColor)
 
 type RgbColor = (Float, Float, Float)
@@ -32,6 +31,15 @@ blockChar orientation fraction = case orientation of
   where
     index = floor (fraction * 8) `mod` 8
 
+findElement :: Float -> (RowElement -> Maybe a) -> [RowElement] -> Maybe a
+findElement stop predicate [] = Nothing
+findElement stop predicate (element@(Block _ _ pos) : rest)
+  | pos > stop = Nothing
+  | otherwise = case predicate element of
+      Just x -> Just x
+      Nothing -> findElement stop predicate rest
+
+-- `elements` should be sorted
 drawRow :: Orientation -> Int -> Float -> RgbColor -> [RowElement] -> Widget ()
 drawRow orientation size offset rowColor elements = combine $ do
   i <- case orientation of
@@ -40,16 +48,24 @@ drawRow orientation size offset rowColor elements = combine $ do
   let background =
         overlay (if i == 1 then 0.5 else 0) (255, 255, 255) $
           overlay ((1 - i / fromIntegral size) * 0.3 + 0.05) rowColor (0, 0, 0)
-  let right = listToMaybe $ do
-        Block color len pos <- elements
-        if i + offset + 1 > pos && i + offset + 1 <= pos + len
-          then return (max 0 (pos - (i + offset)), color)
-          else []
-  let left = listToMaybe $ do
-        Block color len pos <- elements
-        if i + offset >= pos + len - 1 && i + offset < pos + len
-          then return (pos + len - (i + offset), color)
-          else []
+  let right =
+        findElement
+          (offset + fromIntegral size)
+          ( \(Block color len pos) ->
+              if i + offset + 1 > pos && i + offset + 1 <= pos + len
+                then Just (max 0 (pos - (i + offset)), color)
+                else Nothing
+          )
+          elements
+  let left =
+        findElement
+          (offset + fromIntegral size)
+          ( \(Block color len pos) ->
+              if i + offset >= pos + len - 1 && i + offset < pos + len
+                then Just (pos + len - (i + offset), color)
+                else Nothing
+          )
+          elements
   return $ case (left, right) of
     (Nothing, Nothing) -> withColor background background (str " ")
     (Nothing, Just (fraction, color)) -> withColor color background (str [blockChar orientation fraction])
