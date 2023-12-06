@@ -2,8 +2,7 @@
 
 module HaskMania.TimeKeeper (TimeKeeper, initTimeKeeper, updateTimeM, getTimeM) where
 
-import Control.Monad.Cont (liftIO)
-import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.State.Class (MonadState (..))
 import Data.Time.Clock.System (SystemTime (..), getSystemTime)
 import Sound.ProteaAudio (Sound, soundPaused, soundPos)

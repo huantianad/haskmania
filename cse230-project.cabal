@@ -53,7 +53,7 @@ executable cse230-project
         microlens-th ^>= 0.4.3.14,
         microlens-mtl ^>= 0.2.0.3,
         time ^>= 1.12.2,
-        mtl ^>= 2.2.2,
+        mtl ^>= 2.3.1,
         -- statistics-linreg ^>= 0.3,
         -- vector ^>= 0.13.1.0,
     hs-source-dirs:   app
