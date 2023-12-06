@@ -60,10 +60,10 @@ drawUI d =
         combine $
           str " " : do
             (color, blocks) <-
-              [ ((255, 255, 0), [Block (255, 255, 255, 1) 1 10, Block (255, 255, 255, 1) 1 12, Block (255, 255, 255, 1) 1 16, Block (255, 255, 255, 1) 2 22, Block (255, 0, 0, 1) 1 25, Block (0, 0, 255, 1) 1 26]),
-                ((0, 255, 255), map (\i -> Block (0, 255, 255, 1) 1 (i * 2)) [0 ..]),
+              [ ((255, 255, 0), do i <- [0 ..]; [Block (255, 255, 0, 0.8) 1 (i * 3), Block (255, 255, 255, 0.2) 1 (i * 3 + 1)]),
+                ((0, 255, 255), map (\i -> Block (0, 255, 255, 1) 5.5 (i * 7)) [0 ..]),
                 ((255, 0, 255), do i <- [0 ..]; [Block (255, 0, 255, 1) 1 (i * 5), Block (255, 0, 255, 0.7) 2 (i * 5 + 1)]),
-                ((0, 255, 0), do i <- [0 ..]; [Block (0, 255, 0, 1) 1 (i * 3)])
+                ((0, 255, 0), do i <- [0 ..]; [Block (0, 255, 0, 1) 1 (i * 2)])
                 ]
             let row = drawRow' color blocks
             replicate rowWidth row ++ [str " "],
@@ -71,7 +71,7 @@ drawUI d =
   ]
   where
     currentBeat = d ^. currentTime / 60 * fromIntegral bpm
-    currentBeat' = withAttr D.dialogAttr $ str $ show (floor currentBeat)
+    currentBeat' = withAttr D.dialogAttr $ str $ show (floor currentBeat :: Int)
     a = withAttr D.dialogAttr $ str $ show $ d ^. timeKeeper
     -- Two units per beat
     scroll = currentBeat * 2
