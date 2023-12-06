@@ -32,7 +32,7 @@ blockChar orientation fraction = case orientation of
     index = floor (fraction * 8) `mod` 8
 
 findElement :: Float -> (RowElement -> Maybe a) -> [RowElement] -> Maybe a
-findElement stop predicate [] = Nothing
+findElement _ _ [] = Nothing
 findElement stop predicate (element@(Block _ _ pos) : rest)
   | pos > stop = Nothing
   | otherwise = case predicate element of
