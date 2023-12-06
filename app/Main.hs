@@ -26,7 +26,6 @@ import Control.Concurrent (forkIO, threadDelay)
 import Control.Exception (bracket)
 import Control.Monad
 import Control.Monad.IO.Class (liftIO)
-import Data.Time.Clock.System (SystemTime (MkSystemTime, systemNanoseconds, systemSeconds), getSystemTime)
 import Graphics.Vty qualified as V
 import HaskMania.GameRow (Orientation (Horizontal, Vertical), RgbColor, RowElement (Block), drawRow)
 import HaskMania.TimeKeeper (TimeKeeper, getTimeM, initTimeKeeper, updateTimeM)
@@ -44,7 +43,7 @@ data MyState = MyState
 makeLenses ''MyState
 
 bpm :: Int
-bpm = 85
+bpm = 96
 
 rowOrientation :: Orientation
 rowOrientation = Vertical
@@ -60,10 +59,10 @@ drawUI d =
         combine $
           str " " : do
             (color, blocks) <-
-              [ ((255, 255, 0), do i <- [0 ..]; [Block (255, 255, 0, 0.8) 1 (i * 3), Block (255, 255, 255, 0.2) 1 (i * 3 + 1)]),
-                ((0, 255, 255), map (\i -> Block (0, 255, 255, 1) 5.5 (i * 7)) [0 ..]),
-                ((255, 0, 255), do i <- [0 ..]; [Block (255, 0, 255, 1) 1 (i * 5), Block (255, 0, 255, 0.7) 2 (i * 5 + 1)]),
-                ((0, 255, 0), do i <- [0 ..]; [Block (0, 255, 0, 1) 1 (i * 2)])
+              [ ((255, 255, 0), do i <- [0 ..]; [Block (255, 255, 0, 0.8) 1 (i * 20), Block (255, 255, 255, 0.2) 1 (i * 20 + 1)]),
+                ((0, 255, 255), map (\i -> Block (0, 255, 255, 1) 5.5 (i * 20)) [0 ..]),
+                ((255, 0, 255), do i <- [0 ..]; [Block (255, 0, 255, 1) 1 (i * 20), Block (255, 0, 255, 0.7) 2 (i * 20 + 1)]),
+                ((0, 255, 0), do i <- [0 ..]; [Block (0, 255, 0, 1) 1 (i * 20)])
                 ]
             let row = drawRow' color blocks
             replicate rowWidth row ++ [str " "],
@@ -73,8 +72,8 @@ drawUI d =
     currentBeat = d ^. currentTime / 60 * fromIntegral bpm
     currentBeat' = withAttr D.dialogAttr $ str $ show (floor currentBeat :: Int)
     a = withAttr D.dialogAttr $ str $ show $ d ^. timeKeeper
-    -- Two units per beat
-    scroll = currentBeat * 2
+    -- 40 units per beat
+    scroll = currentBeat * 40
 
     combine = case rowOrientation of
       Horizontal -> vBox
@@ -102,7 +101,7 @@ appEvent (VtyEvent ev) =
       result <- liftIO $ PA.soundUpdate s (not isPaused) 1 1 0 1
       unless result $ liftIO $ fail "Failed to toggle sound state"
     _ -> return ()
-appEvent (AppEvent (Tick _)) = do
+appEvent (AppEvent Tick) = do
   zoom timeKeeper updateTimeM
   zoom timeKeeper getTimeM >>= (currentTime .=)
 appEvent _ = return ()
@@ -150,32 +149,21 @@ withSample filePath = bracket aquire release
       unless result $ fail "Failed to destroy sample."
       PA.finishAudio
 
-data Tick = Tick Double
+data Tick = Tick
 
-msDiff :: SystemTime -> SystemTime -> Int
-msDiff
-  (MkSystemTime {systemSeconds = as, systemNanoseconds = an})
-  (MkSystemTime {systemSeconds = bs, systemNanoseconds = bn}) =
-    (fromIntegral as - fromIntegral bs) * 1000 + (fromIntegral an - fromIntegral bn) `div` 1000000
-
-soundThread :: PA.Sound -> BChan Tick -> IO ()
-soundThread s bChan = do
-  startTime <- getSystemTime
+soundThread :: BChan Tick -> IO ()
+soundThread bChan = do
   forever $ do
-    -- If you swap with the below, it's a lot slower. So something about soundPos is slow
-    -- newTime <- PA.soundPos s
-    -- writeBChan bChan $ Tick newTime
-    newTime <- getSystemTime
-    writeBChan bChan $ Tick $ fromIntegral (msDiff newTime startTime) / 1000
-    threadDelay 1_000
+    writeBChan bChan Tick
+    threadDelay 10_000
 
 main :: IO ()
-main = withSample "audio/pigstep.mp3" $ \sample -> do
+main = withSample "audio/test.ogg" $ \sample -> do
   s <- PA.soundPlay sample 1 1 0 1
   tk <- initTimeKeeper s
 
   bChan <- newBChan 10
-  void $ forkIO $ soundThread s bChan
+  void $ forkIO $ soundThread bChan
 
   let state = initialState s tk
   void $ M.customMainWithDefaultVty (Just bChan) theApp state
