@@ -29,9 +29,7 @@ import Control.Monad.IO.Class (liftIO)
 import Graphics.Vty qualified as V
 import HaskMania.GameRow (Orientation (Horizontal, Vertical), RgbColor, RowElement (Block), drawRow)
 import HaskMania.TimeKeeper (TimeKeeper, getTimeM, initTimeKeeper, updateTimeM)
-import Lens.Micro ((^.))
-import Lens.Micro.Mtl (use, zoom, (.=))
-import Lens.Micro.TH (makeLenses)
+import Lens.Micro.Platform (makeLenses, use, zoom, (.=), (^.))
 import Sound.ProteaAudio qualified as PA
 
 data MyState = MyState
