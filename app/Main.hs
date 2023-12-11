@@ -13,7 +13,6 @@ import Brick
     vBox,
     withAttr,
     withDefAttr,
-    (<=>),
   )
 import Brick.AttrMap qualified as A
 import Brick.BChan
@@ -25,16 +24,17 @@ import Brick.Widgets.Dialog qualified as D
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Exception (bracket)
 import Control.Monad
-import Control.Monad.IO.Class (liftIO)
 import Graphics.Vty qualified as V
 import HaskMania.GameRow (Orientation (Horizontal, Vertical), RgbColor, RowElement (Block), drawRow)
-import HaskMania.TimeKeeper (TimeKeeper, getTimeM, initTimeKeeper, updateTimeM)
+import HaskMania.PauseScreen (pauseScreen)
+import HaskMania.SoundW qualified as SW
+import HaskMania.TimeKeeper (TimeKeeper, getTime, initTimeKeeper, updateTime)
 import Lens.Micro.Platform (makeLenses, use, zoom, (.=), (^.))
 import Sound.ProteaAudio qualified as PA
 
 data MyState = MyState
   { _currentTime :: Double, -- in seconds
-    _sound :: PA.Sound,
+    _sound :: SW.SoundW,
     _timeKeeper :: TimeKeeper
   }
 
@@ -50,26 +50,25 @@ rowWidth :: Int
 rowWidth = 3
 
 drawUI :: MyState -> [Widget ()]
-drawUI d =
-  [ withDefAttr (attrName "background") $ currentBeat' <=> a,
-    withDefAttr (attrName "background") $
-      center $
-        combine $
-          str " " : do
-            (color, blocks) <-
-              [ ((255, 255, 0), do i <- [0 ..]; [Block (255, 255, 0, 0.8) 1 (i * 20), Block (255, 255, 255, 0.2) 1 (i * 20 + 1)]),
-                ((0, 255, 255), map (\i -> Block (0, 255, 255, 1) 5.5 (i * 20)) [0 ..]),
-                ((255, 0, 255), do i <- [0 ..]; [Block (255, 0, 255, 1) 1 (i * 20), Block (255, 0, 255, 0.7) 2 (i * 20 + 1)]),
-                ((0, 255, 0), do i <- [0 ..]; [Block (0, 255, 0, 1) 1 (i * 20)])
-                ]
-            let row = drawRow' color blocks
-            replicate rowWidth row ++ [str " "],
-    withDefAttr (attrName "background") (fill ' ')
-  ]
+drawUI d
+  | not $ SW.soundPaused (d ^. sound) =
+      [ withDefAttr (attrName "background") $
+          center $
+            combine $
+              str " " : do
+                (color, blocks) <-
+                  [ ((255, 255, 0), do i <- [0 ..]; [Block (255, 255, 0, 0.8) 1 (i * 20), Block (255, 255, 255, 0.2) 1 (i * 20 + 1)]),
+                    ((0, 255, 255), map (\i -> Block (0, 255, 255, 1) 5.5 (i * 20)) [0 ..]),
+                    ((255, 0, 255), do i <- [0 ..]; [Block (255, 0, 255, 1) 1 (i * 20), Block (255, 0, 255, 0.7) 2 (i * 20 + 1)]),
+                    ((0, 255, 0), do i <- [0 ..]; [Block (0, 255, 0, 1) 1 (i * 20)])
+                    ]
+                let row = drawRow' color blocks
+                replicate rowWidth row ++ [str " "],
+        withDefAttr (attrName "background") (fill ' ')
+      ]
+  | otherwise = [withDefAttr (attrName "background") (withAttr D.buttonAttr pauseScreen)]
   where
     currentBeat = d ^. currentTime / 60 * fromIntegral bpm
-    currentBeat' = withAttr D.dialogAttr $ str $ show (floor currentBeat :: Int)
-    a = withAttr D.dialogAttr $ str $ show $ d ^. timeKeeper
     -- 40 units per beat
     scroll = currentBeat * 40
 
@@ -91,20 +90,17 @@ drawUI d =
 appEvent :: BrickEvent () Tick -> T.EventM () MyState ()
 appEvent (VtyEvent ev) =
   case ev of
-    V.EvKey V.KEsc [] -> M.halt
+    V.EvKey V.KEsc [] -> zoom sound SW.togglePause
     V.EvKey V.KEnter [] -> M.halt
-    V.EvKey _ _ -> do
-      s <- use sound
-      isPaused <- liftIO $ PA.soundPaused s
-      result <- liftIO $ PA.soundUpdate s (not isPaused) 1 1 0 1
-      unless result $ liftIO $ fail "Failed to toggle sound state"
+    V.EvKey _ _ -> return ()
     _ -> return ()
 appEvent (AppEvent Tick) = do
-  zoom timeKeeper updateTimeM
-  zoom timeKeeper getTimeM >>= (currentTime .=)
+  s <- use sound
+  zoom timeKeeper $ updateTime s
+  zoom timeKeeper (getTime s) >>= (currentTime .=)
 appEvent _ = return ()
 
-initialState :: PA.Sound -> TimeKeeper -> MyState
+initialState :: SW.SoundW -> TimeKeeper -> MyState
 initialState s tk =
   MyState
     { _currentTime = 0,
@@ -157,7 +153,7 @@ soundThread bChan = do
 
 main :: IO ()
 main = withSample "audio/test.ogg" $ \sample -> do
-  s <- PA.soundPlay sample 1 1 0 1
+  s <- SW.soundPlay sample
   tk <- initTimeKeeper s
 
   bChan <- newBChan 10

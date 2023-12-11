@@ -1,19 +1,18 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module HaskMania.TimeKeeper (TimeKeeper, initTimeKeeper, updateTimeM, getTimeM) where
+module HaskMania.TimeKeeper (TimeKeeper, initTimeKeeper, updateTime, getTime) where
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.State.Class (MonadState (..))
+import Control.Monad.State (MonadState (get, put), execStateT)
 import Data.Time.Clock.System (SystemTime (..), getSystemTime)
-import Sound.ProteaAudio (Sound, soundPaused, soundPos)
+import HaskMania.SoundW (SoundW, soundPaused, soundPos)
 
 data TimeKeeper = TimeKeeper
   { points :: [(Double, Double)],
     slope :: Double,
     intercept :: Double,
     startTime :: SystemTime,
-    previouslyReturnedTime :: Double,
-    sound :: Sound
+    previouslyReturnedTime :: Double
   }
 
 instance Show TimeKeeper where
@@ -24,52 +23,48 @@ secondsSince (MkSystemTime {systemSeconds = s, systemNanoseconds = n}) = do
   (MkSystemTime {systemSeconds = ns, systemNanoseconds = nn}) <- getSystemTime
   return $ (fromIntegral ns - fromIntegral s) + ((fromIntegral nn - fromIntegral n) / 1_000_000_000)
 
-initTimeKeeper :: Sound -> IO TimeKeeper
+initTimeKeeper :: SoundW -> IO TimeKeeper
 initTimeKeeper sound = do
   now <- getSystemTime
-  updateTime
+  execStateT
+    (updateTime sound)
     TimeKeeper
       { points = [],
         slope = 0,
         intercept = 0,
         startTime = now,
-        previouslyReturnedTime = 0,
-        sound = sound
+        previouslyReturnedTime = 0
       }
 
-updateTime :: TimeKeeper -> IO TimeKeeper
-updateTime model@TimeKeeper {..} = do
-  x <- secondsSince startTime
-  y <- soundPos sound
+updateTime :: (MonadState TimeKeeper m, MonadIO m) => SoundW -> m ()
+updateTime sound = do
+  model@TimeKeeper {..} <- get
 
-  paused <- soundPaused sound
+  x <- liftIO $ secondsSince startTime
+  y <- liftIO $ soundPos sound
+
+  let paused = soundPaused sound
 
   -- If the audio is paused, this invalidates our previous points
   -- Remove all of them so we can restart from scratch.
-  return $
-    if paused
-      then model {points = []}
-      else addPoint model (x, y)
+  if paused
+    then put $ model {points = []}
+    else put $ addPoint model (x, y)
 
-updateTimeM :: (MonadState TimeKeeper m, MonadIO m) => m ()
-updateTimeM = get >>= (liftIO . updateTime) >>= put
+getTime :: (MonadState TimeKeeper m, MonadIO m) => SoundW -> m Double
+getTime sound = do
+  model@TimeKeeper {..} <- get
 
-getTime :: TimeKeeper -> IO (Double, TimeKeeper)
-getTime model@TimeKeeper {..} = do
-  x <- secondsSince startTime
+  x <- liftIO $ secondsSince startTime
   let time = x * slope + intercept
-  paused <- soundPaused sound
+
+  let paused = soundPaused sound
 
   if (time < previouslyReturnedTime) || paused
-    then return (previouslyReturnedTime, model)
-    else return (time, model {previouslyReturnedTime = time})
-
-getTimeM :: (MonadState TimeKeeper m, MonadIO m) => m Double
-getTimeM = do
-  tk <- get
-  (time, tk') <- liftIO $ getTime tk
-  put tk'
-  return time
+    then return previouslyReturnedTime
+    else do
+      put $ model {previouslyReturnedTime = time}
+      return time
 
 -- Once the number of points in the regression reaches this limit,
 -- older points will be dropped and replaced with the newly added points.

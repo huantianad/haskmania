@@ -42,6 +42,8 @@ executable cse230-project
     other-modules:
         HaskMania.GameRow
         HaskMania.TimeKeeper
+        HaskMania.PauseScreen
+        HaskMania.SoundW
     -- other-extensions:
     build-depends:
         base ^>=4.17.2.0,
