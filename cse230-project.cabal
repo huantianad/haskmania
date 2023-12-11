@@ -40,6 +40,7 @@ executable cse230-project
     import:           options
     main-is:          Main.hs
     other-modules:
+        HaskMania.Data.Beatmap
         HaskMania.GameRow
         HaskMania.TimeKeeper
         HaskMania.PauseScreen
@@ -47,6 +48,7 @@ executable cse230-project
     -- other-extensions:
     build-depends:
         base ^>=4.17.2.0,
+        containers ^>=0.6.7,
         proteaaudio ^>= 0.10.1,
         -- proteaaudio-sdl ^>= 0.10.1,
         vty >= 6.1,
