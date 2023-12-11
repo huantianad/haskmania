@@ -138,7 +138,7 @@ withSample :: String -> (PA.Sample -> IO ()) -> IO ()
 withSample filePath = bracket aquire release
   where
     aquire = do
-      result <- PA.initAudio 64 48000 1024
+      result <- PA.initAudio 64 48000 256
       unless result $ fail "Failed to initialize the audio system."
       PA.sampleFromFile filePath 1.0
 
