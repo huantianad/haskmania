@@ -30,7 +30,7 @@ togglePause :: (MonadState SoundW m, MonadIO m) => m ()
 togglePause = do
   sw@SoundW {..} <- get
 
-  result <- liftIO $ PA.soundUpdate wrappedSound (not soundPaused) 1 1 0 1
+  result <- liftIO $ PA.soundUpdate wrappedSound (not soundPaused) volume volume 0 1
   unless result $ liftIO $ fail "Failed to toggle sound state"
 
   put $ sw {soundPaused = not soundPaused}
