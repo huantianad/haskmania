@@ -15,9 +15,6 @@ data TimeKeeper = TimeKeeper
     previouslyReturnedTime :: Double
   }
 
-instance Show TimeKeeper where
-  show tk = show $ points tk
-
 secondsSince :: SystemTime -> IO Double
 secondsSince (MkSystemTime {systemSeconds = s, systemNanoseconds = n}) = do
   (MkSystemTime {systemSeconds = ns, systemNanoseconds = nn}) <- getSystemTime

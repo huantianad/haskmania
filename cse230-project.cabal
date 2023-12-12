@@ -45,6 +45,7 @@ executable cse230-project
         HaskMania.TimeKeeper
         HaskMania.PauseScreen
         HaskMania.SoundW
+        HaskMania.Settings
     -- other-extensions:
     build-depends:
         base ^>=4.17.2.0,

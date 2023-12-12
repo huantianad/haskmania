@@ -1,10 +1,10 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module HaskMania.SoundW (SoundW (soundPaused), soundPlay, togglePause, soundPos, volumeAdjust) where
+module HaskMania.SoundW (SoundW (soundPaused), VolumeDir (..), soundPlay, togglePause, soundPos, volumeAdjust) where
 
 import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Control.Monad.State.Class (MonadState (get, put))
+import Control.Monad.State.Class (MonadState (get), modify)
 import Sound.ProteaAudio qualified as PA
 
 data SoundW = SoundW
@@ -12,6 +12,8 @@ data SoundW = SoundW
     soundPaused :: Bool,
     volume :: Float
   }
+
+data VolumeDir = Increase | Decrease
 
 soundPlay :: PA.Sample -> IO SoundW
 soundPlay s = do
@@ -23,27 +25,27 @@ soundPlay s = do
         volume = 1
       }
 
+-- Calls PA.soundUpdate on the wrapped sound, so that the state of the sound
+-- matches the current state of the settings in the wrapper.
+soundUpdate :: (MonadState SoundW m, MonadIO m) => m ()
+soundUpdate = do
+  SoundW {..} <- get
+  result <- liftIO $ PA.soundUpdate wrappedSound soundPaused volume volume 0 1
+  unless result $ liftIO $ fail "Failed to toggle sound state"
+
 soundPos :: SoundW -> IO Double
 soundPos = PA.soundPos . wrappedSound
 
 togglePause :: (MonadState SoundW m, MonadIO m) => m ()
 togglePause = do
-  sw@SoundW {..} <- get
+  modify $ \sw -> sw {soundPaused = not $ soundPaused sw}
+  soundUpdate
 
-  result <- liftIO $ PA.soundUpdate wrappedSound (not soundPaused) volume volume 0 1
-  unless result $ liftIO $ fail "Failed to toggle sound state"
-
-  put $ sw {soundPaused = not soundPaused}
-
-volumeAdjust :: (MonadState SoundW m, MonadIO m) => String -> m ()
+volumeAdjust :: (MonadState SoundW m, MonadIO m) => VolumeDir -> m ()
 volumeAdjust dir = do
-  sw@SoundW {..} <- get
+  let volumeModifier = case dir of
+        Increase -> min 1 . (+ 0.1)
+        Decrease -> max 0 . subtract 0.1
 
-  let nv = case dir of
-        "up" -> min 1 (volume + 0.1)
-        "down" -> max 0 (volume - 0.1)
-        _ -> volume
-
-  result <- liftIO $ PA.soundUpdate wrappedSound soundPaused nv nv 0 1
-  unless result $ liftIO $ fail "Failed to adjust volume"
-  put $ sw {volume = nv}
+  modify $ \sw -> sw {volume = volumeModifier $ volume sw}
+  soundUpdate

@@ -98,8 +98,8 @@ appEvent (VtyEvent ev) =
       s <- use settings
       case key of
         -- placeholders
-        k | k == (s ^. SG.volumeUpKey) -> zoom sound (SW.volumeAdjust "up")
-        k | k == (s ^. SG.volumeDownKey) -> zoom sound (SW.volumeAdjust "down")
+        k | k == (s ^. SG.volumeUpKey) -> zoom sound (SW.volumeAdjust SW.Increase)
+        k | k == (s ^. SG.volumeDownKey) -> zoom sound (SW.volumeAdjust SW.Decrease)
         k | k == (s ^. SG.columnOneKey) -> return ()
         k | k == (s ^. SG.columnTwoKey) -> return ()
         k | k == (s ^. SG.columnThreeKey) -> return ()
