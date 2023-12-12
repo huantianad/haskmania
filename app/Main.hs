@@ -48,8 +48,8 @@ bpm = 96
 rowOrientation :: Orientation
 rowOrientation = Vertical
 
-rowWidth :: Int
-rowWidth = 3
+rowPadding :: Int
+rowPadding = 2
 
 drawUI :: MyState -> [Widget ()]
 drawUI d
@@ -58,14 +58,14 @@ drawUI d
           center $
             combine $
               str " " : do
-                (color, blocks) <-
-                  [ ((255, 255, 0), do i <- [0 ..]; [Block (255, 255, 0, 0.8) 1 (i * 20), Block (255, 255, 255, 0.2) 1 (i * 20 + 1)]),
-                    ((0, 255, 255), map (\i -> Block (0, 255, 255, 1) 5.5 (i * 20)) [0 ..]),
-                    ((255, 0, 255), do i <- [0 ..]; [Block (255, 0, 255, 1) 1 (i * 20), Block (255, 0, 255, 0.7) 2 (i * 20 + 1)]),
-                    ((0, 255, 0), do i <- [0 ..]; [Block (0, 255, 0, 1) 1 (i * 20)])
+                (char, color, blocks) <-
+                  [ ('h', (255, 255, 0), do i <- [0 ..]; [Block (255, 255, 0, 0.8) 1 (i * 20), Block (255, 255, 255, 0.2) 1 (i * 20 + 1)]),
+                    ('j', (0, 255, 255), map (\i -> Block (0, 255, 255, 1) 5.5 (i * 20)) [0 ..]),
+                    ('k', (255, 0, 255), do i <- [0 ..]; [Block (255, 0, 255, 1) 1 (i * 20), Block (255, 0, 255, 0.7) 2 (i * 20 + 1)]),
+                    ('l', (0, 255, 0), do i <- [0 ..]; [Block (0, 255, 0, 1) 1 (i * 20)])
                     ]
                 let row = drawRow' color blocks
-                replicate rowWidth row ++ [str " "],
+                replicate rowPadding (row Nothing) ++ [row (Just char)] ++ replicate rowPadding (row Nothing) ++ [str " "],
         withDefAttr (attrName "background") (fill ' ')
       ]
   | otherwise = [withDefAttr (attrName "background") (withAttr D.buttonAttr pauseScreen)]
@@ -78,16 +78,16 @@ drawUI d
       Horizontal -> vBox
       Vertical -> hBox
     center = case rowOrientation of
-      Horizontal -> C.vCenter
-      Vertical -> C.hCenter
+      Horizontal -> C.vCenterLayer
+      Vertical -> C.hCenterLayer
     getSize = case rowOrientation of
       Horizontal -> T.availWidthL
       Vertical -> T.availHeightL
 
-    drawRow' :: RgbColor -> [RowElement] -> Widget ()
-    drawRow' color elements = T.Widget T.Fixed T.Fixed $ do
+    drawRow' :: RgbColor -> [RowElement] -> Maybe Char -> Widget ()
+    drawRow' color elements char = T.Widget T.Fixed T.Fixed $ do
       context <- T.getContext
-      T.render $ drawRow rowOrientation (context ^. getSize) (realToFrac scroll) color elements
+      T.render $ drawRow rowOrientation (context ^. getSize) (realToFrac scroll) color elements char
 
 appEvent :: BrickEvent () Tick -> T.EventM () MyState ()
 appEvent (VtyEvent ev) =

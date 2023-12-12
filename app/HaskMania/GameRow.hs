@@ -45,38 +45,41 @@ findElement stop predicate (element@(Block _ _ pos) : rest)
       Nothing -> findElement stop predicate rest
 
 -- `elements` should be sorted
-drawRow :: Orientation -> Int -> Float -> RgbColor -> [RowElement] -> Widget ()
-drawRow orientation size offset rowColor elements = combine $ do
+drawRow :: Orientation -> Int -> Float -> RgbColor -> [RowElement] -> Maybe Char -> Widget ()
+drawRow orientation size offset rowColor elements char = combine $ do
   i <- case orientation of
     Horizontal -> [0 .. (fromIntegral size - 1)]
     Vertical -> reverse [0 .. (fromIntegral size - 1)]
   let background =
-        overlay (255, 255, 255, if i == 1 then 0.5 else 0) $
+        overlay (255, 255, 255, if i == 2 then 0.5 else 0) $
           overlay (mixAlpha ((1 - i / fromIntegral size) * 0.3 + 0.05) rowColor) (0, 0, 0)
-  let right =
-        findElement
-          (offset + fromIntegral size)
-          ( \(Block color len pos) ->
-              if i + offset + 1 > pos && i + offset + 1 <= pos + len
-                then Just (max 0 (pos - (i + offset)), color)
-                else Nothing
-          )
-          elements
-  let left =
-        findElement
-          (offset + fromIntegral size)
-          ( \(Block color len pos) ->
-              if i + offset >= pos + len - 1 && i + offset < pos + len
-                then Just (pos + len - (i + offset), color)
-                else Nothing
-          )
-          elements
-  return $ case (left, right) of
-    (Nothing, Nothing) -> withColor background background (str " ")
-    (Nothing, Just (fraction, color)) -> withColor (overlay color background) background (str [blockChar orientation fraction])
-    (Just (fraction, color), Nothing) -> withColor background (overlay color background) (str [blockChar orientation fraction])
-    -- In the case of a conflict, I'm arbitrarily letting the left one win
-    (Just (fraction, leftColor), Just (_, rightColor)) -> withColor (overlay rightColor background) (overlay leftColor background) (str [blockChar orientation fraction])
+  case (i, char) of
+    (0, Just c) -> return $ withColor background rowColor (str [c])
+    _ -> do
+      let right =
+            findElement
+              (offset + fromIntegral size)
+              ( \(Block color len pos) ->
+                  if i + offset + 1 > pos && i + offset + 1 <= pos + len
+                    then Just (max 0 (pos - (i + offset)), color)
+                    else Nothing
+              )
+              elements
+      let left =
+            findElement
+              (offset + fromIntegral size)
+              ( \(Block color len pos) ->
+                  if i + offset >= pos + len - 1 && i + offset < pos + len
+                    then Just (pos + len - (i + offset), color)
+                    else Nothing
+              )
+              elements
+      return $ case (left, right) of
+        (Nothing, Nothing) -> withColor background background (str " ")
+        (Nothing, Just (fraction, color)) -> withColor (overlay color background) background (str [blockChar orientation fraction])
+        (Just (fraction, color), Nothing) -> withColor background (overlay color background) (str [blockChar orientation fraction])
+        -- In the case of a conflict, I'm arbitrarily letting the left one win
+        (Just (fraction, leftColor), Just (_, rightColor)) -> withColor (overlay rightColor background) (overlay leftColor background) (str [blockChar orientation fraction])
   where
     combine = case orientation of
       Horizontal -> hBox
