@@ -1,5 +1,5 @@
-module HaskMania.Settings 
-  ( defaultSettings, 
+module HaskMania.Settings
+  ( defaultSettings,
     MySettings,
     volumeUpKey,
     volumeDownKey,
@@ -7,14 +7,13 @@ module HaskMania.Settings
     columnTwoKey,
     columnThreeKey,
     columnFourKey,
-    changeKey
-  ) where
+    changeKey,
+  )
+where
 
-import Control.Monad (unless)
-import Control.Monad.IO.Class (MonadIO (liftIO))
-import Control.Monad.State.Class (MonadState (get, put))
+import Control.Monad.State.Class (MonadState (put))
 import Graphics.Vty qualified as V
-import Lens.Micro.Platform (makeLenses, ASetter', (&), (.~))
+import Lens.Micro.Platform (ASetter', makeLenses, (&), (.~))
 
 -- Your module code here
 data MySettings = MySettings
@@ -40,8 +39,7 @@ defaultSettings =
       _columnFourKey = V.KChar 'l'
     }
 
-changeKey :: (MonadState MySettings m, MonadIO m) => ASetter' MySettings V.Key -> V.Key -> MySettings -> m ()
+changeKey :: (MonadState MySettings m) => ASetter' MySettings V.Key -> V.Key -> MySettings -> m ()
 -- changeKey keyField newKey settings = settings & keyField .~ newKey
 changeKey keyField newKey settings = do
   put $ settings & keyField .~ newKey
-
