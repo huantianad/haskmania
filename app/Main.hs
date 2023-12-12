@@ -92,6 +92,8 @@ appEvent (VtyEvent ev) =
   case ev of
     V.EvKey V.KEsc [] -> zoom sound SW.togglePause
     V.EvKey V.KEnter [] -> M.halt
+    V.EvKey V.KUp [] -> zoom sound (SW.volumeAdjust "up")
+    V.EvKey V.KDown [] -> zoom sound (SW.volumeAdjust "down")
     V.EvKey _ _ -> return ()
     _ -> return ()
 appEvent (AppEvent Tick) = do
