@@ -27,6 +27,7 @@ import Control.Monad
 import Graphics.Vty qualified as V
 import HaskMania.GameRow (Orientation (Horizontal, Vertical), RgbColor, RowElement (Block), drawRow)
 import HaskMania.PauseScreen (pauseScreen)
+import HaskMania.Settings qualified as SG
 import HaskMania.SoundW qualified as SW
 import HaskMania.TimeKeeper (TimeKeeper, getTime, initTimeKeeper, updateTime)
 import Lens.Micro.Platform (makeLenses, use, zoom, (.=), (^.))
@@ -34,6 +35,7 @@ import Sound.ProteaAudio qualified as PA
 
 data MyState = MyState
   { _currentTime :: Double, -- in seconds
+    _settings :: SG.MySettings,
     _sound :: SW.SoundW,
     _timeKeeper :: TimeKeeper
   }
@@ -92,8 +94,19 @@ appEvent (VtyEvent ev) =
   case ev of
     V.EvKey V.KEsc [] -> zoom sound SW.togglePause
     V.EvKey V.KEnter [] -> M.halt
-    V.EvKey V.KUp [] -> zoom sound (SW.volumeAdjust "up")
-    V.EvKey V.KDown [] -> zoom sound (SW.volumeAdjust "down")
+    V.EvKey key [] -> do
+      s <- use settings
+      case key of
+        -- placeholders
+        k | k == (s ^. SG.volumeUpKey) -> zoom sound (SW.volumeAdjust "up")
+        k | k == (s ^. SG.volumeDownKey) -> zoom sound (SW.volumeAdjust "down")
+        k | k == (s ^. SG.columnOneKey) -> return ()
+        k | k == (s ^. SG.columnTwoKey) -> return ()
+        k | k == (s ^. SG.columnThreeKey) -> return ()
+        k | k == (s ^. SG.columnFourKey) -> return ()
+        -- how to change keybindings, hopefully the new key will be inputted
+        V.KChar '+' -> zoom settings (SG.changeKey SG.volumeUpKey (V.KChar '>') s)
+        _ -> return ()
     V.EvKey _ _ -> return ()
     _ -> return ()
 appEvent (AppEvent Tick) = do
@@ -102,10 +115,11 @@ appEvent (AppEvent Tick) = do
   zoom timeKeeper (getTime s) >>= (currentTime .=)
 appEvent _ = return ()
 
-initialState :: SW.SoundW -> TimeKeeper -> MyState
-initialState s tk =
+initialState :: SW.SoundW -> TimeKeeper -> SG.MySettings -> MyState
+initialState s tk ds =
   MyState
     { _currentTime = 0,
+      _settings = ds,
       _sound = s,
       _timeKeeper = tk
     }
@@ -157,9 +171,10 @@ main :: IO ()
 main = withSample "audio/test.ogg" $ \sample -> do
   s <- SW.soundPlay sample
   tk <- initTimeKeeper s
+  let ds = SG.defaultSettings
 
   bChan <- newBChan 10
   void $ forkIO $ soundThread bChan
 
-  let state = initialState s tk
+  let state = initialState s tk ds
   void $ M.customMainWithDefaultVty (Just bChan) theApp state
