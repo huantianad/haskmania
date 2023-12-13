@@ -23,7 +23,7 @@ import Brick.Widgets.Center qualified as C
 import Brick.Widgets.Dialog qualified as D
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Exception (bracket)
-import Control.Monad (forever, unless, void)
+import Control.Monad (forever, unless, void, when)
 import Graphics.Vty qualified as V
 import HaskMania.Data.Beatmap qualified as BM
 import HaskMania.GameRow (Orientation (Horizontal, Vertical), RgbColor, RowElement (Block), drawRow, mixAlpha)
@@ -31,7 +31,7 @@ import HaskMania.PauseScreen (pauseScreen)
 import HaskMania.Settings qualified as SG
 import HaskMania.SoundW qualified as SW
 import HaskMania.TimeKeeper (TimeKeeper, getTime, initTimeKeeper, updateTime)
-import Lens.Micro.Platform (makeLenses, use, zoom, (.=), (^.))
+import Lens.Micro.Platform (ix, makeLenses, use, zoom, (.=), (.~), (^.))
 import Sound.ProteaAudio qualified as PA
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
@@ -47,7 +47,7 @@ data MyState = MyState
 makeLenses ''MyState
 
 bpm :: Int
-bpm = 96
+bpm = 95
 
 scrollSpeed :: Int
 scrollSpeed = 20
@@ -58,13 +58,17 @@ rowOrientation = Vertical
 rowPadding :: Int
 rowPadding = 2
 
+jankOffset :: Double
+jankOffset = -0.1
+
 drawUI :: MyState -> [Widget ()]
 drawUI d
   | SW.soundPaused (d ^. sound) =
       [ withDefAttr (attrName "background") (withAttr D.buttonAttr pauseScreen)
       ]
   | otherwise =
-      [ withDefAttr (attrName "background") $ center $ combine stuff,
+      [ withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ show $ map (!! 0) (d ^. notes)),
+        withDefAttr (attrName "background") $ center $ combine stuff,
         withDefAttr (attrName "background") (fill ' ')
       ]
   where
@@ -109,10 +113,10 @@ appEvent (VtyEvent ev) =
         -- placeholders
         k | k == (s ^. SG.volumeUpKey) -> zoom sound (SW.volumeAdjust SW.Increase)
         k | k == (s ^. SG.volumeDownKey) -> zoom sound (SW.volumeAdjust SW.Decrease)
-        k | k == (s ^. SG.columnOneKey) -> return ()
-        k | k == (s ^. SG.columnTwoKey) -> return ()
-        k | k == (s ^. SG.columnThreeKey) -> return ()
-        k | k == (s ^. SG.columnFourKey) -> return ()
+        k | k == (s ^. SG.columnOneKey) -> handleLaneInput 0
+        k | k == (s ^. SG.columnTwoKey) -> handleLaneInput 1
+        k | k == (s ^. SG.columnThreeKey) -> handleLaneInput 2
+        k | k == (s ^. SG.columnFourKey) -> handleLaneInput 3
         -- how to change keybindings, hopefully the new key will be inputted
         V.KChar '+' -> zoom settings (SG.volumeUpKey .= V.KChar '>')
         _ -> return ()
@@ -121,8 +125,28 @@ appEvent (VtyEvent ev) =
 appEvent (AppEvent Tick) = do
   s <- use sound
   zoom timeKeeper $ updateTime s
-  zoom timeKeeper (getTime s) >>= (currentTime .=)
+
+  newTime <- (+ jankOffset) <$> zoom timeKeeper (getTime s)
+  currentTime .= newTime
+
+  n <- use notes
+  notes .= map (removeOldNotes newTime) n
 appEvent _ = return ()
+
+handleLaneInput :: Int -> T.EventM () MyState ()
+handleLaneInput index = do
+  n <- use notes
+  case n !! index of
+    [] -> return ()
+    nextNote : rest -> do
+      pos <- use currentTime
+      -- TODO: handle offset
+      when (nextNote - 0.250 < pos && pos < nextNote + 0.250) $ notes . ix index .= rest
+
+-- expects input to be sorted!
+removeOldNotes :: Double -> [Double] -> [Double]
+removeOldNotes _ [] = []
+removeOldNotes pos (x : xs) = if x < (pos - 0.250) then removeOldNotes pos xs else x : xs
 
 initialState :: SW.SoundW -> TimeKeeper -> SG.MySettings -> MyState
 initialState s tk ds =
@@ -131,8 +155,10 @@ initialState s tk ds =
       _settings = ds,
       _sound = s,
       _timeKeeper = tk,
-      _notes = [[0, 4 ..], [1, 5 ..], [2, 6 ..], [3, 7 ..]]
+      _notes = map timesBeats [[0, 4 ..], [1, 5 ..], [2, 6 ..], [3, 7 ..]]
     }
+  where
+    timesBeats = map (\i -> fromIntegral i / fromIntegral bpm * 60)
 
 theMap :: A.AttrMap
 theMap =
