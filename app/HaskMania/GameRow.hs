@@ -1,4 +1,4 @@
-module HaskMania.GameRow (RowElement (Block), drawRow, RgbColor, RgbaColor, Orientation (Vertical, Horizontal)) where
+module HaskMania.GameRow (RowElement (Block), drawRow, RgbColor, RgbaColor, Orientation (Vertical, Horizontal), mixAlpha) where
 
 import Brick (Widget, hBox, modifyDefAttr, str, vBox)
 import Graphics.Vty (Color (RGBColor), withBackColor, withForeColor)

@@ -23,30 +23,34 @@ import Brick.Widgets.Center qualified as C
 import Brick.Widgets.Dialog qualified as D
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Exception (bracket)
-import Control.Monad
+import Control.Monad (forever, unless, void)
 import Graphics.Vty qualified as V
 import HaskMania.Data.Beatmap qualified as BM
-import HaskMania.GameRow (Orientation (Horizontal, Vertical), RgbColor, RowElement (Block), drawRow)
+import HaskMania.GameRow (Orientation (Horizontal, Vertical), RgbColor, RowElement (Block), drawRow, mixAlpha)
 import HaskMania.PauseScreen (pauseScreen)
 import HaskMania.Settings qualified as SG
 import HaskMania.SoundW qualified as SW
 import HaskMania.TimeKeeper (TimeKeeper, getTime, initTimeKeeper, updateTime)
 import Lens.Micro.Platform (makeLenses, use, zoom, (.=), (^.))
 import Sound.ProteaAudio qualified as PA
-import System.Environment
-import System.Exit
+import System.Environment (getArgs)
+import System.Exit (exitFailure)
 
 data MyState = MyState
   { _currentTime :: Double, -- in seconds
     _settings :: SG.MySettings,
     _sound :: SW.SoundW,
-    _timeKeeper :: TimeKeeper
+    _timeKeeper :: TimeKeeper,
+    _notes :: [[Double]]
   }
 
 makeLenses ''MyState
 
 bpm :: Int
 bpm = 96
+
+scrollSpeed :: Int
+scrollSpeed = 20
 
 rowOrientation :: Orientation
 rowOrientation = Vertical
@@ -56,28 +60,14 @@ rowPadding = 2
 
 drawUI :: MyState -> [Widget ()]
 drawUI d
-  | not $ SW.soundPaused (d ^. sound) =
-      [ withDefAttr (attrName "background") $
-          center $
-            combine $
-              str " " : do
-                let s = d ^. settings
-                ((V.KChar char), color, blocks) <-
-                  [ ((s ^. SG.columnOneKey), (255, 255, 0), do i <- [0 ..]; [Block (255, 255, 0, 0.8) 1 (i * 20), Block (255, 255, 255, 0.2) 1 (i * 20 + 1)]),
-                    ((s ^. SG.columnTwoKey), (0, 255, 255), map (\i -> Block (0, 255, 255, 1) 5.5 (i * 20)) [0 ..]),
-                    ((s ^. SG.columnThreeKey), (255, 0, 255), do i <- [0 ..]; [Block (255, 0, 255, 1) 1 (i * 20), Block (255, 0, 255, 0.7) 2 (i * 20 + 1)]),
-                    ((s ^. SG.columnFourKey), (0, 255, 0), do i <- [0 ..]; [Block (0, 255, 0, 1) 1 (i * 20)])
-                    ]
-                let row = drawRow' color blocks
-                replicate rowPadding (row Nothing) ++ [row (Just char)] ++ replicate rowPadding (row Nothing) ++ [str " "],
+  | SW.soundPaused (d ^. sound) =
+      [ withDefAttr (attrName "background") (withAttr D.buttonAttr pauseScreen)
+      ]
+  | otherwise =
+      [ withDefAttr (attrName "background") $ center $ combine stuff,
         withDefAttr (attrName "background") (fill ' ')
       ]
-  | otherwise = [withDefAttr (attrName "background") (withAttr D.buttonAttr pauseScreen)]
   where
-    currentBeat = d ^. currentTime / 60 * fromIntegral bpm
-    -- 40 units per beat
-    scroll = currentBeat * 40
-
     combine = case rowOrientation of
       Horizontal -> vBox
       Vertical -> hBox
@@ -88,10 +78,25 @@ drawUI d
       Horizontal -> T.availWidthL
       Vertical -> T.availHeightL
 
-    drawRow' :: RgbColor -> [RowElement] -> Maybe Char -> Widget ()
-    drawRow' color elements char = T.Widget T.Fixed T.Fixed $ do
+    drawRow' :: RgbColor -> [Double] -> Maybe Char -> Widget ()
+    drawRow' color noteTimes char = T.Widget T.Fixed T.Fixed $ do
       context <- T.getContext
-      T.render $ drawRow rowOrientation (context ^. getSize) scroll color elements char
+      let elements = map (Block (mixAlpha 1 color) 1 . (* fromIntegral scrollSpeed)) noteTimes
+
+      T.render $ drawRow rowOrientation (context ^. getSize) (d ^. currentTime * fromIntegral scrollSpeed) color elements char
+
+    stuff = do
+      let s = d ^. settings
+      ((V.KChar char, color), blocks) <-
+        zip
+          [ (s ^. SG.columnOneKey, (255, 255, 0)),
+            (s ^. SG.columnTwoKey, (0, 255, 255)),
+            (s ^. SG.columnThreeKey, (255, 0, 255)),
+            (s ^. SG.columnFourKey, (0, 255, 0))
+          ]
+          (d ^. notes)
+      let row = drawRow' color blocks
+      str " " : replicate rowPadding (row Nothing) ++ [row (Just char)] ++ replicate rowPadding (row Nothing) ++ [str " "]
 
 appEvent :: BrickEvent () Tick -> T.EventM () MyState ()
 appEvent (VtyEvent ev) =
@@ -125,7 +130,8 @@ initialState s tk ds =
     { _currentTime = 0,
       _settings = ds,
       _sound = s,
-      _timeKeeper = tk
+      _timeKeeper = tk,
+      _notes = [[0, 4 ..], [1, 5 ..], [2, 6 ..], [3, 7 ..]]
     }
 
 theMap :: A.AttrMap
@@ -173,10 +179,9 @@ withSample filePath = bracket aquire release
 data Tick = Tick
 
 soundThread :: BChan Tick -> IO ()
-soundThread bChan = do
-  forever $ do
-    writeBChan bChan Tick
-    threadDelay 10_000
+soundThread bChan = forever $ do
+  writeBChan bChan Tick
+  threadDelay 10_000
 
 data Args = Args
   { beatmapFile :: String,
@@ -196,7 +201,7 @@ initBeatmap (Args beatmapFile difficulty) = do
   undefined
 
 initApp :: Args -> IO ()
-initApp (Args beatmapFile _) = withSample beatmapFile $ \sample -> do
+initApp (Args beatmapFile _) = withSample "audio/test.ogg" $ \sample -> do
   s <- SW.soundPlay sample
   tk <- initTimeKeeper s
   let ds = SG.defaultSettings
