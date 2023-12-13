@@ -25,6 +25,7 @@ import Control.Concurrent (forkIO, threadDelay)
 import Control.Exception (bracket)
 import Control.Monad
 import Graphics.Vty qualified as V
+import HaskMania.Data.Beatmap qualified as BM
 import HaskMania.GameRow (Orientation (Horizontal, Vertical), RgbColor, RowElement (Block), drawRow)
 import HaskMania.PauseScreen (pauseScreen)
 import HaskMania.Settings qualified as SG
@@ -32,6 +33,8 @@ import HaskMania.SoundW qualified as SW
 import HaskMania.TimeKeeper (TimeKeeper, getTime, initTimeKeeper, updateTime)
 import Lens.Micro.Platform (makeLenses, use, zoom, (.=), (^.))
 import Sound.ProteaAudio qualified as PA
+import System.Environment
+import System.Exit
 
 data MyState = MyState
   { _currentTime :: Double, -- in seconds
@@ -58,11 +61,12 @@ drawUI d
           center $
             combine $
               str " " : do
-                (char, color, blocks) <-
-                  [ ('h', (255, 255, 0), do i <- [0 ..]; [Block (255, 255, 0, 0.8) 1 (i * 20), Block (255, 255, 255, 0.2) 1 (i * 20 + 1)]),
-                    ('j', (0, 255, 255), map (\i -> Block (0, 255, 255, 1) 5.5 (i * 20)) [0 ..]),
-                    ('k', (255, 0, 255), do i <- [0 ..]; [Block (255, 0, 255, 1) 1 (i * 20), Block (255, 0, 255, 0.7) 2 (i * 20 + 1)]),
-                    ('l', (0, 255, 0), do i <- [0 ..]; [Block (0, 255, 0, 1) 1 (i * 20)])
+                let s = d ^. settings
+                ((V.KChar char), color, blocks) <-
+                  [ ((s ^. SG.columnOneKey), (255, 255, 0), do i <- [0 ..]; [Block (255, 255, 0, 0.8) 1 (i * 20), Block (255, 255, 255, 0.2) 1 (i * 20 + 1)]),
+                    ((s ^. SG.columnTwoKey), (0, 255, 255), map (\i -> Block (0, 255, 255, 1) 5.5 (i * 20)) [0 ..]),
+                    ((s ^. SG.columnThreeKey), (255, 0, 255), do i <- [0 ..]; [Block (255, 0, 255, 1) 1 (i * 20), Block (255, 0, 255, 0.7) 2 (i * 20 + 1)]),
+                    ((s ^. SG.columnFourKey), (0, 255, 0), do i <- [0 ..]; [Block (0, 255, 0, 1) 1 (i * 20)])
                     ]
                 let row = drawRow' color blocks
                 replicate rowPadding (row Nothing) ++ [row (Just char)] ++ replicate rowPadding (row Nothing) ++ [str " "],
@@ -149,11 +153,18 @@ theApp =
 withSample :: String -> (PA.Sample -> IO ()) -> IO ()
 withSample filePath = bracket aquire release
   where
+    -- \| This function initializes the audio system and plays a sample from a file.
+    -- It takes the file path as an argument and returns a result indicating whether
+    -- the audio system was successfully initialized.
+    aquire :: IO PA.Sample
     aquire = do
       result <- PA.initAudio 64 48000 256
       unless result $ fail "Failed to initialize the audio system."
       PA.sampleFromFile filePath 1.0
 
+    -- \| Releases the given audio sample.
+    --   It destroys the sample and finishes the audio.
+    release :: PA.Sample -> IO ()
     release sample = do
       result <- PA.sampleDestroy sample
       unless result $ fail "Failed to destroy sample."
@@ -167,8 +178,25 @@ soundThread bChan = do
     writeBChan bChan Tick
     threadDelay 10_000
 
-main :: IO ()
-main = withSample "audio/test.ogg" $ \sample -> do
+data Args = Args
+  { beatmapFile :: String,
+    difficulty :: Float
+  }
+
+-- TODO: parse command line arguments
+parseCommandLine :: [String] -> IO (Maybe Args)
+parseCommandLine [] = return Nothing
+parseCommandLine (beatmapFile : args) = return $ Just (Args beatmapFile $ read $ head args)
+
+initBeatmap :: Args -> IO BM.Beatmap
+initBeatmap (Args beatmapFile difficulty) = do
+  -- beatmap <- parseBeatmap beatmapFile
+  -- choose map with closest star rating to difficulty
+  -- return beatmap
+  undefined
+
+initApp :: Args -> IO ()
+initApp (Args beatmapFile _) = withSample beatmapFile $ \sample -> do
   s <- SW.soundPlay sample
   tk <- initTimeKeeper s
   let ds = SG.defaultSettings
@@ -178,3 +206,14 @@ main = withSample "audio/test.ogg" $ \sample -> do
 
   let state = initialState s tk ds
   void $ M.customMainWithDefaultVty (Just bChan) theApp state
+
+main :: IO ()
+main = do
+  myArgs <- getArgs >>= parseCommandLine
+  case myArgs of
+    Nothing -> do
+      putStrLn "Usage: ./cse230-project <beatmap> <difficulty>"
+      exitFailure
+    Just args -> do
+      -- beatmap <- initBeatmap args
+      initApp args
