@@ -20,6 +20,7 @@ import Brick.Main qualified as M
 import Brick.Types (BrickEvent (..))
 import Brick.Types qualified as T
 import Brick.Widgets.Center qualified as C
+import Brick.Widgets.Core ((<=>))
 import Brick.Widgets.Dialog qualified as D
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Exception (bracket)
@@ -31,7 +32,7 @@ import HaskMania.PauseScreen (pauseScreen)
 import HaskMania.Settings qualified as SG
 import HaskMania.SoundW qualified as SW
 import HaskMania.TimeKeeper (TimeKeeper, getTime, initTimeKeeper, updateTime)
-import Lens.Micro.Platform (ix, makeLenses, use, zoom, (.=), (.~), (^.))
+import Lens.Micro.Platform (ix, makeLenses, use, zoom, (+=), (.=), (.~), (^.))
 import Sound.ProteaAudio qualified as PA
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
@@ -41,7 +42,8 @@ data MyState = MyState
     _settings :: SG.MySettings,
     _sound :: SW.SoundW,
     _timeKeeper :: TimeKeeper,
-    _notes :: [[Double]]
+    _notes :: [[Double]],
+    _combo :: Int
   }
 
 makeLenses ''MyState
@@ -67,7 +69,8 @@ drawUI d
       [ withDefAttr (attrName "background") (withAttr D.buttonAttr pauseScreen)
       ]
   | otherwise =
-      [ withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ show $ map (!! 0) (d ^. notes)),
+      [ withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ show $ map (!! 0) (d ^. notes))
+          <=> withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ "Combo: " ++ show (d ^. combo)),
         withDefAttr (attrName "background") $ center $ combine stuff,
         withDefAttr (attrName "background") (fill ' ')
       ]
@@ -130,10 +133,20 @@ appEvent (AppEvent Tick) = do
   currentTime .= newTime
 
   n <- use notes
-  notes .= map (removeOldNotes newTime) n
+  let updatedNotes = map (removeOldNotes newTime) n
+  notes .= map fst updatedNotes
+  when (any snd updatedNotes) $ combo .= 0
 appEvent _ = return ()
 
-handleLaneInput :: Int -> T.EventM () MyState ()
+-- | Handles the input for a specific lane in the game.
+--   Removes the next note from the lane's note list if the
+--   current time is within a certain range around the note.
+--   The range is defined by an offset of +/- 0.250 seconds.
+handleLaneInput ::
+  -- | The index of the lane
+  Int ->
+  -- | The event monad action
+  T.EventM () MyState ()
 handleLaneInput index = do
   n <- use notes
   case n !! index of
@@ -142,11 +155,26 @@ handleLaneInput index = do
       pos <- use currentTime
       -- TODO: handle offset
       when (nextNote - 0.250 < pos && pos < nextNote + 0.250) $ notes . ix index .= rest
+      -- if within window then increment combo, else set to 0
+      if nextNote - 0.250 < pos && pos < nextNote + 0.250
+        then combo += 1
+        else combo .= 0
 
--- expects input to be sorted!
-removeOldNotes :: Double -> [Double] -> [Double]
-removeOldNotes _ [] = []
-removeOldNotes pos (x : xs) = if x < (pos - 0.250) then removeOldNotes pos xs else x : xs
+-- | Removes old notes from a list based on a given position.
+--   An old note is defined as a note that is less than (pos - 0.250).
+--   Returns a tuple containing the new list of notes and a boolean
+--   indicating whether any notes were removed. Expects input to be sorted!
+--
+--   Examples:
+--
+--   >>> removeOldNotes 0.5 [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
+--   ([0.3,0.4,0.5,0.6],True)
+--
+--   >>> removeOldNotes 1.0 [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
+--   ([],True)
+removeOldNotes :: Double -> [Double] -> ([Double], Bool)
+removeOldNotes _ [] = ([], False)
+removeOldNotes pos (x : xs) = if x < (pos - 0.250) then (fst (removeOldNotes pos xs), True) else (x : xs, False)
 
 initialState :: SW.SoundW -> TimeKeeper -> SG.MySettings -> MyState
 initialState s tk ds =
@@ -155,7 +183,8 @@ initialState s tk ds =
       _settings = ds,
       _sound = s,
       _timeKeeper = tk,
-      _notes = map timesBeats [[0, 4 ..], [1, 5 ..], [2, 6 ..], [3, 7 ..]]
+      _notes = map timesBeats [[0, 4 ..], [1, 5 ..], [2, 6 ..], [3, 7 ..]],
+      _combo = 0
     }
   where
     timesBeats = map (\i -> fromIntegral i / fromIntegral bpm * 60)
