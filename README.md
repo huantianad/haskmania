@@ -1,4 +1,4 @@
-# cse230-project
+# HaskMania
 
 A terminal-based 4k VSRG, written in Haskell and brick.
 
@@ -20,10 +20,10 @@ $ cabal install
 ## Usage
 
 ```shell
-$ cabal run
+$ cabal run . -- "path/to/beatmap.osz"
 ```
 
-To exit the game, press the escape or enter key.
+To exit the game, press the enter key.
 
 ## Members
 
