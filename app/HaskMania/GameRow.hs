@@ -3,12 +3,12 @@ module HaskMania.GameRow (RowElement (Block), drawRow, RgbColor, RgbaColor, Orie
 import Brick (Widget, hBox, modifyDefAttr, str, vBox)
 import Graphics.Vty (Color (RGBColor), withBackColor, withForeColor)
 
-type RgbColor = (Float, Float, Float)
+type RgbColor = (Double, Double, Double)
 
-type RgbaColor = (Float, Float, Float, Float)
+type RgbaColor = (Double, Double, Double, Double)
 
 -- Block: color length position
-data RowElement = Block RgbaColor Float Float
+data RowElement = Block RgbaColor Double Double
 
 data Orientation = Vertical | Horizontal
 
@@ -23,20 +23,20 @@ overlay (r', g', b', alpha) (r, g, b) =
     b * (1 - alpha) + b' * alpha
   )
 
-mixAlpha :: Float -> RgbColor -> RgbaColor
+mixAlpha :: Double -> RgbColor -> RgbaColor
 mixAlpha alpha (r, g, b) = (r, g, b, alpha)
 
 withColor :: RgbColor -> RgbColor -> Widget n -> Widget n
 withColor back fore = modifyDefAttr (\a -> withBackColor (withForeColor a (toRGBColor fore)) (toRGBColor back))
 
-blockChar :: Orientation -> Float -> Char
+blockChar :: Orientation -> Double -> Char
 blockChar orientation fraction = case orientation of
   Vertical -> " ▁▂▃▄▅▆▇█" !! index
   Horizontal -> " ▏▎▍▌▋▊▉█" !! index
   where
     index = floor (fraction * 8) `mod` 8
 
-findElement :: Float -> (RowElement -> Maybe a) -> [RowElement] -> Maybe a
+findElement :: Double -> (RowElement -> Maybe a) -> [RowElement] -> Maybe a
 findElement _ _ [] = Nothing
 findElement stop predicate (element@(Block _ _ pos) : rest)
   | pos > stop = Nothing
@@ -45,7 +45,7 @@ findElement stop predicate (element@(Block _ _ pos) : rest)
       Nothing -> findElement stop predicate rest
 
 -- `elements` should be sorted
-drawRow :: Orientation -> Int -> Float -> RgbColor -> [RowElement] -> Maybe Char -> Widget ()
+drawRow :: Orientation -> Int -> Double -> RgbColor -> [RowElement] -> Maybe Char -> Widget ()
 drawRow orientation size offset rowColor elements char = combine $ do
   i <- case orientation of
     Horizontal -> [0 .. (fromIntegral size - 1)]

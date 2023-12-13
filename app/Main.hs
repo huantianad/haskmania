@@ -87,7 +87,7 @@ drawUI d
     drawRow' :: RgbColor -> [RowElement] -> Maybe Char -> Widget ()
     drawRow' color elements char = T.Widget T.Fixed T.Fixed $ do
       context <- T.getContext
-      T.render $ drawRow rowOrientation (context ^. getSize) (realToFrac scroll) color elements char
+      T.render $ drawRow rowOrientation (context ^. getSize) scroll color elements char
 
 appEvent :: BrickEvent () Tick -> T.EventM () MyState ()
 appEvent (VtyEvent ev) =
@@ -105,7 +105,7 @@ appEvent (VtyEvent ev) =
         k | k == (s ^. SG.columnThreeKey) -> return ()
         k | k == (s ^. SG.columnFourKey) -> return ()
         -- how to change keybindings, hopefully the new key will be inputted
-        V.KChar '+' -> zoom settings (SG.changeKey SG.volumeUpKey (V.KChar '>') s)
+        V.KChar '+' -> zoom settings (SG.volumeUpKey .= V.KChar '>')
         _ -> return ()
     V.EvKey _ _ -> return ()
     _ -> return ()
