@@ -25,6 +25,8 @@ import Brick.Widgets.Dialog qualified as D
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Exception (bracket)
 import Control.Monad (forever, unless, void, when)
+import Control.Monad.State (MonadState)
+import Data.List (genericLength)
 import Data.Map qualified as DM
 import Graphics.Vty qualified as V
 import HaskMania.Data.Beatmap qualified as BM
@@ -33,7 +35,7 @@ import HaskMania.PauseScreen (pauseScreen)
 import HaskMania.Settings qualified as SG
 import HaskMania.SoundW qualified as SW
 import HaskMania.TimeKeeper (TimeKeeper, getTime, initTimeKeeper, updateTime)
-import Lens.Micro.Platform (ix, makeLenses, use, zoom, (+=), (.=), (^.))
+import Lens.Micro.Platform (ix, makeLenses, use, zoom, (%=), (+=), (.=), (^.))
 import Sound.ProteaAudio qualified as PA
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
@@ -56,7 +58,8 @@ data ScoreKeeper = ScoreKeeper
   { _score :: Int,
     _currentCombo :: Int,
     _highestCombo :: Int,
-    _previousHitJudgement :: Judgement
+    _previousHitJudgement :: Judgement,
+    _hitOffsets :: [Int]
   }
   deriving (Show)
 
@@ -85,8 +88,20 @@ rowOrientation = Vertical
 rowPadding :: Int
 rowPadding = 2
 
-jankOffset :: Double
-jankOffset = -0.1
+inputAudioOffset :: Double
+inputAudioOffset = 0.070
+
+posWithInputAudioOffset :: (MonadState MyState m) => m Double
+posWithInputAudioOffset = subtract inputAudioOffset <$> use currentTime
+
+visualOffset :: Double
+visualOffset = 0.160
+
+posWithVisualOffset :: MyState -> Double
+posWithVisualOffset = subtract visualOffset <$> _currentTime
+
+average :: (Real a1, Fractional a2) => [a1] -> a2
+average xs = realToFrac (sum xs) / genericLength xs
 
 drawUI :: MyState -> [Widget ()]
 drawUI d
@@ -95,7 +110,8 @@ drawUI d
       ]
   | otherwise =
       [ withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ show $ map (!! 0) (d ^. notes))
-          <=> withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ "Combo: " ++ show (d ^. scoreKeeper)),
+          <=> withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ "Combo: " ++ show (d ^. scoreKeeper))
+          <=> withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ "Average: " ++ show (average (d ^. (scoreKeeper . hitOffsets)))),
         withDefAttr (attrName "background") $ center $ combine stuff,
         withDefAttr (attrName "background") (fill ' ')
       ]
@@ -115,7 +131,7 @@ drawUI d
       context <- T.getContext
       let elements = map (Block (mixAlpha 1 color) 1 . (* fromIntegral scrollSpeed)) noteTimes
 
-      T.render $ drawRow rowOrientation (context ^. getSize) (d ^. currentTime * fromIntegral scrollSpeed) color elements char
+      T.render $ drawRow rowOrientation (context ^. getSize) (posWithVisualOffset d * fromIntegral scrollSpeed) color elements char
 
     stuff = do
       let s = d ^. settings
@@ -153,15 +169,18 @@ appEvent (VtyEvent ev) =
 appEvent (AppEvent Tick) = do
   s <- use sound
   zoom timeKeeper $ updateTime s
+  zoom timeKeeper (getTime s) >>= (currentTime .=)
 
-  newTime <- (+ jankOffset) <$> zoom timeKeeper (getTime s)
-  currentTime .= newTime
+  removeOldNotesM
+appEvent _ = return ()
 
+removeOldNotesM :: T.EventM () MyState ()
+removeOldNotesM = do
+  pos <- posWithInputAudioOffset
   n <- use notes
-  let updatedNotes = map (removeOldNotes newTime) n
+  let updatedNotes = map (removeOldNotes pos) n
   notes .= map fst updatedNotes
   when (any snd updatedNotes) $ zoom scoreKeeper $ updateScore Bleh
-appEvent _ = return ()
 
 updateScore :: Judgement -> T.EventM () ScoreKeeper ()
 updateScore judgement = do
@@ -191,15 +210,19 @@ handleLaneInput ::
   T.EventM () MyState ()
 handleLaneInput index = do
   n <- use notes
-  pos <- use currentTime
+  pos <- posWithInputAudioOffset
   case n !! index of
     [] -> return ()
     nextNote : rest -> case checkNote pos nextNote of
       Nothing -> return ()
       Just judgement -> do
         notes . ix index .= rest
+        (scoreKeeper . hitOffsets) %= (floor ((pos - nextNote) * 1000) :)
         zoom scoreKeeper $ updateScore judgement
 
+-- Given an input position and a note's position, returns what
+-- judgement window the input falls under, or Nothing if the input
+-- is outside of the hit window entirely
 checkNote :: Double -> Double -> Maybe Judgement
 checkNote pos note = DM.foldlWithKey func Nothing judgementToWindow
   where
@@ -238,7 +261,8 @@ initialState s tk ds =
           { _score = 0,
             _currentCombo = 0,
             _highestCombo = 0,
-            _previousHitJudgement = Immaculate
+            _previousHitJudgement = Immaculate,
+            _hitOffsets = []
           }
     }
   where
