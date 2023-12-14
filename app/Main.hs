@@ -25,6 +25,7 @@ import Brick.Widgets.Dialog qualified as D
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Exception (bracket)
 import Control.Monad (forever, unless, void, when)
+import Data.Map qualified as DM
 import Graphics.Vty qualified as V
 import HaskMania.Data.Beatmap qualified as BM
 import HaskMania.GameRow (Orientation (Horizontal, Vertical), RgbColor, RowElement (Block), drawRow, mixAlpha)
@@ -32,10 +33,34 @@ import HaskMania.PauseScreen (pauseScreen)
 import HaskMania.Settings qualified as SG
 import HaskMania.SoundW qualified as SW
 import HaskMania.TimeKeeper (TimeKeeper, getTime, initTimeKeeper, updateTime)
-import Lens.Micro.Platform (ix, makeLenses, use, zoom, (+=), (.=), (.~), (^.))
+import Lens.Micro.Platform (ix, makeLenses, use, zoom, (+=), (.=), (^.))
 import Sound.ProteaAudio qualified as PA
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
+
+data Judgement = Immaculate | GoodEnough | Whatever | Bleh deriving (Show, Eq)
+
+instance Ord Judgement where
+  compare a b = compare (relativeRank a) (relativeRank b)
+    where
+      relativeRank :: Judgement -> Int
+      relativeRank Immaculate = 1
+      relativeRank GoodEnough = 2
+      relativeRank Whatever = 3
+      relativeRank Bleh = 4
+
+judgementToWindow :: DM.Map Judgement Double
+judgementToWindow = DM.fromList [(Immaculate, 0.025), (GoodEnough, 0.100), (Whatever, 0.300), (Bleh, 0.50)]
+
+data ScoreKeeper = ScoreKeeper
+  { _score :: Int,
+    _currentCombo :: Int,
+    _highestCombo :: Int,
+    _previousHitJudgement :: Judgement
+  }
+  deriving (Show)
+
+makeLenses ''ScoreKeeper
 
 data MyState = MyState
   { _currentTime :: Double, -- in seconds
@@ -43,7 +68,7 @@ data MyState = MyState
     _sound :: SW.SoundW,
     _timeKeeper :: TimeKeeper,
     _notes :: [[Double]],
-    _combo :: Int
+    _scoreKeeper :: ScoreKeeper
   }
 
 makeLenses ''MyState
@@ -70,7 +95,7 @@ drawUI d
       ]
   | otherwise =
       [ withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ show $ map (!! 0) (d ^. notes))
-          <=> withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ "Combo: " ++ show (d ^. combo)),
+          <=> withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ "Combo: " ++ show (d ^. scoreKeeper)),
         withDefAttr (attrName "background") $ center $ combine stuff,
         withDefAttr (attrName "background") (fill ' ')
       ]
@@ -135,8 +160,25 @@ appEvent (AppEvent Tick) = do
   n <- use notes
   let updatedNotes = map (removeOldNotes newTime) n
   notes .= map fst updatedNotes
-  when (any snd updatedNotes) $ combo .= 0
+  when (any snd updatedNotes) $ zoom scoreKeeper $ updateScore Bleh
 appEvent _ = return ()
+
+updateScore :: Judgement -> T.EventM () ScoreKeeper ()
+updateScore judgement = do
+  previousHitJudgement .= judgement
+
+  case judgement of
+    Bleh -> currentCombo .= 0
+    _ -> currentCombo += 1
+
+  updateHighestCombo <- (>) <$> use currentCombo <*> use highestCombo
+  when updateHighestCombo $ use currentCombo >>= (highestCombo .=)
+
+  score += case judgement of
+    Immaculate -> 3
+    GoodEnough -> 2
+    Whatever -> 1
+    Bleh -> 0
 
 -- | Handles the input for a specific lane in the game.
 --   Removes the next note from the lane's note list if the
@@ -149,16 +191,23 @@ handleLaneInput ::
   T.EventM () MyState ()
 handleLaneInput index = do
   n <- use notes
+  pos <- use currentTime
   case n !! index of
     [] -> return ()
-    nextNote : rest -> do
-      pos <- use currentTime
-      -- TODO: handle offset
-      when (nextNote - 0.250 < pos && pos < nextNote + 0.250) $ notes . ix index .= rest
-      -- if within window then increment combo, else set to 0
-      if nextNote - 0.250 < pos && pos < nextNote + 0.250
-        then combo += 1
-        else combo .= 0
+    nextNote : rest -> case checkNote pos nextNote of
+      Nothing -> return ()
+      Just judgement -> do
+        notes . ix index .= rest
+        zoom scoreKeeper $ updateScore judgement
+
+checkNote :: Double -> Double -> Maybe Judgement
+checkNote pos note = DM.foldlWithKey func Nothing judgementToWindow
+  where
+    func :: Maybe Judgement -> Judgement -> Double -> Maybe Judgement
+    func prevJudge@(Just _) _ _ = prevJudge
+    func Nothing thisJudge thisWindow
+      | note - thisWindow < pos && pos < note + thisWindow = Just thisJudge
+      | otherwise = Nothing
 
 -- | Removes old notes from a list based on a given position.
 --   An old note is defined as a note that is less than (pos - 0.250).
@@ -184,9 +233,16 @@ initialState s tk ds =
       _sound = s,
       _timeKeeper = tk,
       _notes = map timesBeats [[0, 4 ..], [1, 5 ..], [2, 6 ..], [3, 7 ..]],
-      _combo = 0
+      _scoreKeeper =
+        ScoreKeeper
+          { _score = 0,
+            _currentCombo = 0,
+            _highestCombo = 0,
+            _previousHitJudgement = Immaculate
+          }
     }
   where
+    timesBeats :: [Integer] -> [Double]
     timesBeats = map (\i -> fromIntegral i / fromIntegral bpm * 60)
 
 theMap :: A.AttrMap
