@@ -25,6 +25,7 @@
           pkgs.cabal-install
 
           pkgs.zlib
+          pkgs.libz
           pkgs.pkg-config
           pkgs.libpulseaudio
           pkgs.SDL2

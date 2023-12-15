@@ -89,26 +89,23 @@ data MyState = MyState
 
 makeLenses ''MyState
 
-bpm :: Int
-bpm = 95
-
 scrollSpeed :: Int
-scrollSpeed = 40
+scrollSpeed = 60
 
 rowOrientation :: Orientation
 rowOrientation = Vertical
 
 rowPadding :: Int
-rowPadding = 2
+rowPadding = 3
 
 inputAudioOffset :: Double
-inputAudioOffset = 0.070
+inputAudioOffset = 0.220
 
 posWithInputAudioOffset :: (MonadState MyState m) => m Double
 posWithInputAudioOffset = subtract inputAudioOffset <$> use currentTime
 
 visualOffset :: Double
-visualOffset = 0.160
+visualOffset = 0.250
 
 posWithVisualOffset :: MyState -> Double
 posWithVisualOffset = subtract visualOffset <$> _currentTime
@@ -116,8 +113,23 @@ posWithVisualOffset = subtract visualOffset <$> _currentTime
 average :: (Real a1, Fractional a2) => [a1] -> a2
 average xs = realToFrac (sum xs) / genericLength xs
 
+noteCount :: MyState -> Int
+noteCount = sum . DM.elems . _judgementsMap . _scoreKeeper
+
 drawUI :: MyState -> [Widget ()]
 drawUI d
+  | all null (d ^. notes) =
+      [ withDefAttr
+          (attrName "background")
+          ( withAttr D.buttonAttr $
+              str $
+                ("Score: " ++ show (d ^. (scoreKeeper . score)))
+                  ++ "/"
+                  ++ show (noteCount d * 3)
+          )
+          <=> withDefAttr (attrName "background") (withAttr D.buttonAttr $ str ("Combo: " ++ show (d ^. (scoreKeeper . highestCombo)) ++ "/" ++ show (noteCount d)))
+          <=> withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ "Hits: " ++ show (d ^. (scoreKeeper . judgementsMap)))
+      ]
   | SW.soundPaused (d ^. sound) =
       [ withDefAttr (attrName "background") (withAttr D.buttonAttr pauseScreen)
       ]
