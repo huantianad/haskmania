@@ -2,6 +2,8 @@
 
 A terminal-based 4k VSRG, written in Haskell and brick.
 
+![Gameplay by David](./docs/gameplay.gif)
+
 ## Installation
 
 ### Building with Nix (Recommended)
