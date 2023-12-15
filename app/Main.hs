@@ -23,7 +23,7 @@ import Brick.Widgets.Center (centerLayer)
 import Brick.Widgets.Center qualified as C
 import Brick.Widgets.Core ((<=>))
 import Brick.Widgets.Dialog qualified as D
-import Conduit (findC)
+import Conduit (findC, foldC)
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Exception (bracket)
 import Control.Monad (forever, unless, void, when)
@@ -346,21 +346,21 @@ loadBeatmap (Args beatmapSetPath _starRating) =
     openBeatmapSet beatmapSetPath
       .| findC (const True)
 
-loadBeatmapAudio :: Args -> BM.Beatmap -> IO (Maybe ByteString)
+loadBeatmapAudio :: Args -> BM.Beatmap -> IO ByteString
 loadBeatmapAudio (Args {beatmapSetPath}) bm =
   runConduitRes $
     readFileFromBeatmapSet beatmapSetPath ((BM.audioFilename . BM.info) bm)
-      -- TODO: rather than using findC we should be concatenating all of the ByteStrings
-      .| findC (const True)
+      .| foldC
+
+loadBeatmapAndAudio :: Args -> IO (BM.Beatmap, ByteString)
+loadBeatmapAndAudio args = do
+  bm <- fromMaybe (error "failed to find beatmap") <$> loadBeatmap args
+  sampleBytes <- loadBeatmapAudio args bm
+  return (bm, sampleBytes)
 
 initApp :: Args -> IO ()
 initApp args = do
-  bm <- fromMaybe (error "failed to find beatmap") <$> loadBeatmap args
-  print bm
-
-  sampleBytes <-
-    fromMaybe (error "failed to find audio file")
-      <$> loadBeatmapAudio args bm
+  (bm, sampleBytes) <- loadBeatmapAndAudio args
 
   withSample (PA.sampleFromMemory sampleBytes 1.0) $ \sample -> do
     s <- SW.soundPlay sample

@@ -16,7 +16,6 @@ import Data.Functor
 import Data.Map qualified as Map
 import Data.Text qualified as T
 import Data.Text.Encoding as TE
-import Data.Text.IO qualified as TIO
 import Data.Word (Word8)
 import HaskMania.Data.Beatmap qualified as B
 import Prelude hiding (length, takeWhile)
@@ -28,8 +27,7 @@ openBeatmapSet path =
   where
     readBeatmaps = awaitForever readBeatmap
 
-    readBeatmap (Left entry@ZipEntry {zipEntryName}) = do
-      liftIO $ either TIO.putStrLn BS.putStrLn zipEntryName
+    readBeatmap (Left entry) = do
       if isBeatmap entry
         then do
           bm <- write .| sinkParser beatmap
