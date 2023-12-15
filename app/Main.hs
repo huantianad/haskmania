@@ -33,7 +33,7 @@ import Data.ByteString (ByteString)
 import Data.Conduit
 import Data.List (genericLength)
 import Data.Map qualified as DM
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromJust, fromMaybe)
 import Data.Ord (clamp)
 import Data.Text qualified as Text
 import GHC.List (foldl')
@@ -47,11 +47,11 @@ import HaskMania.PauseScreen (pauseScreen)
 import HaskMania.Settings qualified as SG
 import HaskMania.SoundW qualified as SW
 import HaskMania.TimeKeeper (TimeKeeper, getTime, initTimeKeeper, updateTime)
-import Lens.Micro.Platform (ix, makeLenses, use, zoom, (%=), (%~), (&), (+=), (.=), (^.))
+import Lens.Micro.Platform (at, ix, makeLenses, use, zoom, (%=), (%~), (&), (+=), (.=), (^.))
 import Options.Applicative qualified as O
 import Sound.ProteaAudio qualified as PA
 
-data Judgement = Immaculate | GoodEnough | Whatever | Bleh deriving (Show, Eq)
+data Judgement = Immaculate | GoodEnough | Whatever | Bleh deriving (Show, Eq, Enum, Bounded)
 
 instance Ord Judgement where
   compare a b = compare (relativeRank a) (relativeRank b)
@@ -63,14 +63,15 @@ instance Ord Judgement where
       relativeRank Bleh = 4
 
 judgementToWindow :: DM.Map Judgement Double
-judgementToWindow = DM.fromList [(Immaculate, 0.025), (GoodEnough, 0.100), (Whatever, 0.300), (Bleh, 0.50)]
+judgementToWindow = DM.fromList [(Immaculate, 0.020), (GoodEnough, 0.40), (Whatever, 0.120), (Bleh, 0.250)]
 
 data ScoreKeeper = ScoreKeeper
   { _score :: Int,
     _currentCombo :: Int,
     _highestCombo :: Int,
     _previousHitJudgement :: Judgement,
-    _hitOffsets :: [Int]
+    _hitOffsets :: [Int],
+    _judgementsMap :: DM.Map Judgement Int
   }
   deriving (Show)
 
@@ -214,6 +215,8 @@ updateScore judgement = do
     Whatever -> 1
     Bleh -> 0
 
+  judgementsMap . at judgement %= Just . (+ 1) . fromJust
+
 -- | Handles the input for a specific lane in the game.
 --   Removes the next note from the lane's note list if the
 --   current time is within a certain range around the note.
@@ -277,7 +280,8 @@ initialState s tk ds n =
             _currentCombo = 0,
             _highestCombo = 0,
             _previousHitJudgement = Immaculate,
-            _hitOffsets = []
+            _hitOffsets = [],
+            _judgementsMap = DM.fromList $ map (,0) [minBound .. maxBound]
           },
       _feedback = [Notice (132, 204, 22) "LMAO" 0]
     }
