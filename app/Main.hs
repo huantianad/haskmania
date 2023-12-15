@@ -22,7 +22,7 @@ import Brick.Types (BrickEvent (..))
 import Brick.Types qualified as T
 import Brick.Widgets.Center (centerLayer)
 import Brick.Widgets.Center qualified as C
-import Brick.Widgets.Core ((<=>))
+import Brick.Widgets.Core (modifyDefAttr, (<=>))
 import Brick.Widgets.Dialog qualified as D
 import Conduit (findC, foldC)
 import Control.Concurrent (forkIO, threadDelay)
@@ -32,6 +32,7 @@ import Control.Monad.State (MonadState)
 import Data.ByteString (ByteString)
 import Data.Conduit
 import Data.List (genericLength)
+import Data.Map (assocs)
 import Data.Map qualified as DM
 import Data.Maybe (fromJust, fromMaybe)
 import Data.Ord (clamp)
@@ -50,6 +51,7 @@ import HaskMania.TimeKeeper (TimeKeeper, getTime, initTimeKeeper, updateTime)
 import Lens.Micro.Platform (at, ix, makeLenses, use, zoom, (%=), (%~), (&), (+=), (.=), (^.))
 import Options.Applicative qualified as O
 import Sound.ProteaAudio qualified as PA
+import Text.Printf (printf)
 
 data Judgement = Immaculate | GoodEnough | Whatever | Bleh deriving (Show, Eq, Enum, Bounded)
 
@@ -119,19 +121,32 @@ noteCount = sum . DM.elems . _judgementsMap . _scoreKeeper
 drawUI :: MyState -> [Widget ()]
 drawUI d
   | all null (d ^. notes) =
-      [ withDefAttr
-          (attrName "background")
-          ( withAttr D.buttonAttr $
-              str $
-                ("Score: " ++ show (d ^. (scoreKeeper . score)))
-                  ++ "/"
-                  ++ show (noteCount d * 3)
-          )
-          <=> withDefAttr (attrName "background") (withAttr D.buttonAttr $ str ("Combo: " ++ show (d ^. (scoreKeeper . highestCombo)) ++ "/" ++ show (noteCount d)))
-          <=> withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ "Hits: " ++ show (d ^. (scoreKeeper . judgementsMap)))
+      [ withAttr
+          D.buttonAttr
+          $ C.center
+            ( modifyDefAttr (`V.withStyle` V.bold) (str "Results")
+                <=> str
+                  ( ("Score: " ++ show (d ^. (scoreKeeper . score)))
+                      ++ "/"
+                      ++ show (noteCount d * 3)
+                  )
+                <=> str ("Combo: " ++ show (d ^. (scoreKeeper . highestCombo)) ++ "/" ++ show (noteCount d))
+                <=> str "Hits:"
+                <=> vBox
+                  ( do
+                      (judgement, count) <- assocs (d ^. (scoreKeeper . judgementsMap))
+                      let nameRank :: Judgement -> String
+                          nameRank Immaculate = "Immaculate"
+                          nameRank GoodEnough = "Good enough"
+                          nameRank Whatever = "Whatever"
+                          nameRank Bleh = "Bleh"
+                      return $ str (printf "%4d" count ++ " " ++ nameRank judgement)
+                  )
+                  -- <=> str ("Hits: " ++ show (d ^. (scoreKeeper . judgementsMap)))
+            )
       ]
   | SW.soundPaused (d ^. sound) =
-      [ withDefAttr (attrName "background") (withAttr D.buttonAttr pauseScreen)
+      [ withAttr D.buttonAttr pauseScreen
       ]
   | otherwise =
       fmap (centerLayer . drawFeedback (d ^. currentTime)) (d ^. feedback)
@@ -179,6 +194,9 @@ appEvent (VtyEvent ev) =
   case ev of
     V.EvKey V.KEsc [] -> zoom sound SW.togglePause
     V.EvKey V.KEnter [] -> M.halt
+    -- Uncomment this if you're working on the end screen. Press the END key to
+    -- skip to the end of the song
+    -- V.EvKey V.KEnd [] -> notes .= []
     V.EvKey key [] -> do
       s <- use settings
       case key of

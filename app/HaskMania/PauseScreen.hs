@@ -1,7 +1,12 @@
 module HaskMania.PauseScreen (pauseScreen) where
 
-import Brick (Widget, str)
-import Brick.Widgets.Center (center)
+import Brick (Widget, modifyDefAttr, str, (<=>))
+import Brick.Widgets.Center (hCenter, vCenter)
+import Graphics.Vty.Attributes (bold, withStyle)
 
 pauseScreen :: Widget ()
-pauseScreen = center $ str "Paused\nPress Enter to exit\nPress Esc to resume"
+pauseScreen =
+  vCenter
+    ( hCenter (modifyDefAttr (`withStyle` bold) (str "Paused"))
+        <=> hCenter (str "Press Enter to exit\nPress Esc to resume")
+    )
