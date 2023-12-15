@@ -63,7 +63,7 @@ instance Ord Judgement where
       relativeRank Bleh = 4
 
 judgementToWindow :: DM.Map Judgement Double
-judgementToWindow = DM.fromList [(Immaculate, 0.020), (GoodEnough, 0.40), (Whatever, 0.120), (Bleh, 0.250)]
+judgementToWindow = DM.fromList [(Immaculate, 0.020), (GoodEnough, 0.040), (Whatever, 0.120), (Bleh, 0.250)]
 
 data ScoreKeeper = ScoreKeeper
   { _score :: Int,
