@@ -46,7 +46,7 @@ getAnimationState t
 
 -- | this will be useful for clearing feedback that is done
 feedbackVisible :: Time -> Feedback -> Bool
-feedbackVisible t (Notice _ _ start) = getAnimationState (t - start) == Hidden
+feedbackVisible t (Notice _ _ start) = getAnimationState (t - start) /= Hidden
 
 drawFeedback :: Time -> Feedback -> Widget ()
 drawFeedback t (Notice color text start) =
