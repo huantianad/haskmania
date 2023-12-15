@@ -20,10 +20,18 @@ $ cabal install
 ## Usage
 
 ```shell
-$ cabal run . -- "path/to/beatmap.osz"
+$ cabal run . -- FILE VERSION
 ```
 
+Where `FILE` is the path to the beatmap file and `VERSION` is the difficulty name, such as `easy`.
+
 To exit the game, press the enter key.
+
+Here are some sample beatmap files we used. For copyright reasons, they are not included in this repo. These links will expire in 2024 due to Discord API changes.
+
+- [347779 sakuzyo - Altale no video.osz](https://cdn.discordapp.com/attachments/1157417217865023559/1185268918777024633/347779_sakuzyo_-_Altale_no_video.osz)
+- [171421 M2U - Quo Vadis.osz](https://cdn.discordapp.com/attachments/1157417217865023559/1185268920253423686/171421_M2U_-_Quo_Vadis.osz)
+- [1301740 M2U - Promise feat. Sherie.osz](https://cdn.discordapp.com/attachments/1157417217865023559/1185286890862162050/1301740_M2U_-_Promise_feat._Sherie.osz)
 
 ## Members
 

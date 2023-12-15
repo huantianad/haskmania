@@ -41,7 +41,7 @@ import Graphics.Vty qualified as V
 import HaskMania.Color (applyAlpha)
 import HaskMania.Data.Beatmap qualified as BM
 import HaskMania.Data.Parser (openBeatmapSet, readFileFromBeatmapSet)
-import HaskMania.Feedback (Feedback (Notice), drawFeedback)
+import HaskMania.Feedback (Feedback (Notice), drawFeedback, feedbackVisible)
 import HaskMania.GameRow (Orientation (Horizontal, Vertical), RgbColor, RowElement (Block), drawRow)
 import HaskMania.PauseScreen (pauseScreen)
 import HaskMania.Settings qualified as SG
@@ -229,6 +229,12 @@ updateScore judgement = do
 
   judgementsMap . at judgement %= Just . (+ 1) . fromJust
 
+createFeedback :: Judgement -> Double -> Feedback
+createFeedback Bleh = Notice (248, 113, 113) "BLEH"
+createFeedback Whatever = Notice (250, 204, 21) "WHATEVER"
+createFeedback GoodEnough = Notice (163, 230, 53) "GOOD ENOUGH"
+createFeedback Immaculate = Notice (232, 121, 249) "IMMACULATE"
+
 -- | Handles the input for a specific lane in the game.
 --   Removes the next note from the lane's note list if the
 --   current time is within a certain range around the note.
@@ -241,6 +247,8 @@ handleLaneInput ::
 handleLaneInput index = do
   n <- use notes
   pos <- posWithInputAudioOffset
+  t <- use currentTime
+  fbs <- use feedback
   case n !! index of
     [] -> return ()
     nextNote : rest -> case checkNote pos nextNote of
@@ -249,6 +257,7 @@ handleLaneInput index = do
         notes . ix index .= rest
         (scoreKeeper . hitOffsets) %= (floor ((pos - nextNote) * 1000) :)
         zoom scoreKeeper $ updateScore judgement
+        feedback .= createFeedback judgement t : filter (feedbackVisible t) fbs
 
 -- Given an input position and a note's position, returns what
 -- judgement window the input falls under, or Nothing if the input
@@ -295,7 +304,7 @@ initialState s tk ds n =
             _hitOffsets = [],
             _judgementsMap = DM.fromList $ map (,0) [minBound .. maxBound]
           },
-      _feedback = [Notice (132, 204, 22) "LMAO" 0]
+      _feedback = [Notice (0, 0, 0) "BEGIN" 0]
     }
 
 theMap :: A.AttrMap
