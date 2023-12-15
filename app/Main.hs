@@ -87,7 +87,8 @@ data MyState = MyState
     _timeKeeper :: TimeKeeper,
     _notes :: [[Double]],
     _scoreKeeper :: ScoreKeeper,
-    _feedback :: [Feedback]
+    _feedback :: [Feedback],
+    _pressTimes :: [Double]
   }
 
 makeLenses ''MyState
@@ -109,6 +110,10 @@ posWithInputAudioOffset = subtract inputAudioOffset <$> use currentTime
 
 visualOffset :: Double
 visualOffset = 0.250
+
+-- | seconds that a row lights up when you press a key
+lightUpTime :: Double
+lightUpTime = 0.2
 
 posWithVisualOffset :: MyState -> Double
 posWithVisualOffset = subtract visualOffset <$> _currentTime
@@ -170,25 +175,34 @@ drawUI d
       Horizontal -> T.availWidthL
       Vertical -> T.availHeightL
 
-    drawRow' :: RgbColor -> [Double] -> Maybe Char -> Widget ()
-    drawRow' color noteTimes char = T.Widget T.Fixed T.Fixed $ do
+    drawRow' :: RgbColor -> [Double] -> Double -> Maybe Char -> Widget ()
+    drawRow' color noteTimes targetOpacity char = T.Widget T.Fixed T.Fixed $ do
       context <- T.getContext
       let elements = map (Block (applyAlpha 1 color) 1 . (* fromIntegral scrollSpeed)) noteTimes
 
-      T.render $ drawRow rowOrientation (context ^. getSize) (posWithVisualOffset d * fromIntegral scrollSpeed) color elements 0.5 char
+      T.render $
+        drawRow
+          rowOrientation
+          (context ^. getSize)
+          (posWithVisualOffset d * fromIntegral scrollSpeed)
+          color
+          elements
+          targetOpacity
+          char
 
     stuff =
       str " " : do
         let s = d ^. settings
-        ((V.KChar char, color), blocks) <-
-          zip
-            [ (s ^. SG.columnOneKey, (255, 255, 0)),
-              (s ^. SG.columnTwoKey, (0, 255, 255)),
-              (s ^. SG.columnThreeKey, (255, 0, 255)),
-              (s ^. SG.columnFourKey, (0, 255, 0))
+        (((V.KChar char, color), blocks), pressTime) <-
+          [ (s ^. SG.columnOneKey, (255, 255, 0)),
+            (s ^. SG.columnTwoKey, (0, 255, 255)),
+            (s ^. SG.columnThreeKey, (255, 0, 255)),
+            (s ^. SG.columnFourKey, (0, 255, 0))
             ]
-            (d ^. notes)
-        let row = drawRow' color blocks
+            `zip` (d ^. notes)
+            `zip` (d ^. pressTimes)
+        let decay = (min 1 . max 0) (1 - (d ^. currentTime - pressTime) / lightUpTime)
+        let row = drawRow' color blocks (decay * 0.5 + 0.3)
         replicate rowPadding (row Nothing) ++ [row (Just char)] ++ replicate rowPadding (row Nothing) ++ [str " "]
 
 appEvent :: BrickEvent () Tick -> T.EventM () MyState ()
@@ -287,6 +301,7 @@ handleLaneInput index = do
   pos <- posWithInputAudioOffset
   t <- use currentTime
   fbs <- use feedback
+  pressTimes . ix index .= t
   case n !! index of
     [] -> return ()
     nextNote : rest -> case checkNote pos nextNote of
@@ -343,7 +358,8 @@ initialState s tk ds n =
             _accuracy = 0,
             _judgementsMap = DM.fromList $ map (,0) [minBound .. maxBound]
           },
-      _feedback = [Notice (255, 255, 255) "BEGIN" 0]
+      _feedback = [Notice (255, 255, 255) "BEGIN" 0],
+      _pressTimes = [-10, -10, -10, -10]
     }
 
 theMap :: A.AttrMap
