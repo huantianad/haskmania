@@ -147,10 +147,10 @@ time = signed decimal <&> B.Milliseconds
 percent :: Parser B.Percent
 percent = decimal <&> B.Percent
 
-strList :: Char -> Parser [T.Text]
-strList sep = item `sepBy` char sep
+strList :: Char -> (Char -> Bool) -> Parser [T.Text]
+strList sep exclude = item `sepBy` char sep
   where
-    item = takeTill ((== sep) <||> APT.isEndOfLine) <&> TE.decodeUtf8
+    item = takeTill ((== sep) <||> exclude <||> APT.isEndOfLine) <&> TE.decodeUtf8
 
 overlayPos :: Parser B.OverlayPosition
 overlayPos =
@@ -262,7 +262,7 @@ beatmapMetadata = do
       <*> kv "Creator" str
       <*> kv "Version" str
       <*> kv "Source" str
-      <*> kv "Tags" (strList ' ')
+      <*> kv "Tags" (strList ' ' (const False))
       <*> kv "BeatmapID" decimal
       <*> kv "BeatmapSetID" decimal
   where
@@ -440,8 +440,7 @@ hitObject = do
   void $ char ','
   sounds <- hitSounds
   void $ char ','
-  kind <- remainder ty
-  sample <- hitSample
+  (kind, sample) <- remainder ty
 
   return
     B.HitObject
@@ -454,19 +453,21 @@ hitObject = do
   where
     remainder ty
       | ty .&. 0b00000001 /= 0 = do
-          B.Circle <$> circleParams
+          params <- circleParams
+          sample <- option Nothing (Just <$> hitSample)
+          return (B.Circle params, sample)
       | ty .&. 0b00000010 /= 0 = do
           params <- sliderParams
-          void $ char ','
-          return $ B.Slider params
+          sample <- option Nothing (char ',' >> Just <$> hitSample)
+          return (B.Slider params, sample)
       | ty .&. 0b00001000 /= 0 = do
           params <- spinnerParams
-          void $ char ','
-          return $ B.Spinner params
+          sample <- option Nothing (char ',' >> Just <$> hitSample)
+          return (B.Spinner params, sample)
       | ty .&. 0b10000000 /= 0 = do
           params <- holdParams
-          void $ char ':'
-          return $ B.Hold params
+          sample <- option Nothing (char ':' >> Just <$> hitSample)
+          return (B.Hold params, sample)
       | otherwise = error $ "unknown hit object type: " ++ show ty
 
 circleParams :: Parser B.CircleParams
@@ -481,10 +482,8 @@ sliderParams = do
   numSlides <- decimal
   void $ char ','
   length <- double
-  void $ char ','
-  edgeSounds <- decimal `sepBy` char '|'
-  void $ char ','
-  edgeSets <- strList '|'
+  edgeSounds <- option [] (char ',' >> decimal `sepBy` char '|')
+  edgeSets <- option [] (char ',' >> strList '|' (== ','))
 
   return $
     B.SliderParams

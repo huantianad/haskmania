@@ -119,7 +119,7 @@ data HitObject = HitObject
     time :: Time,
     kind :: HitObjectKind,
     sounds :: HitSounds,
-    sample :: HitSample
+    sample :: Maybe HitSample
   }
   deriving (Show)
 
