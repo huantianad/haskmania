@@ -175,7 +175,7 @@ drawUI d
       context <- T.getContext
       let elements = map (Block (applyAlpha 1 color) 1 . (* fromIntegral scrollSpeed)) noteTimes
 
-      T.render $ drawRow rowOrientation (context ^. getSize) (posWithVisualOffset d * fromIntegral scrollSpeed) color elements char
+      T.render $ drawRow rowOrientation (context ^. getSize) (posWithVisualOffset d * fromIntegral scrollSpeed) color elements 0.5 char
 
     stuff =
       str " " : do

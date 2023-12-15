@@ -23,14 +23,14 @@ findElement stop predicate (element@(Block _ _ pos) : rest)
       Just x -> Just x
       Nothing -> findElement stop predicate rest
 
--- `elements` should be sorted
-drawRow :: Orientation -> Int -> Double -> RgbColor -> [RowElement] -> Maybe Char -> Widget ()
-drawRow orientation size offset rowColor elements char = combine $ do
+-- | `elements` should be sorted
+drawRow :: Orientation -> Int -> Double -> RgbColor -> [RowElement] -> Double -> Maybe Char -> Widget ()
+drawRow orientation size offset rowColor elements targetOpacity char = combine $ do
   i <- case orientation of
     Horizontal -> [0 .. (fromIntegral size - 1)]
     Vertical -> reverse [0 .. (fromIntegral size - 1)]
   let background =
-        (0, 0, 0) `overlay` applyAlpha ((1 - i / fromIntegral size) * 0.3 + 0.05) rowColor `overlay` (255, 255, 255, if i == 2 then 0.5 else 0)
+        (0, 0, 0) `overlay` applyAlpha ((1 - i / fromIntegral size) * 0.3 + 0.05) rowColor `overlay` (255, 255, 255, if i == 2 then targetOpacity else 0)
   let right =
         findElement
           (offset + fromIntegral size)
