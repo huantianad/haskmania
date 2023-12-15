@@ -41,6 +41,7 @@ executable cse230-project
     main-is:          Main.hs
     other-modules:
         HaskMania.Data.Beatmap
+        HaskMania.Data.Parser
         HaskMania.GameRow
         HaskMania.TimeKeeper
         HaskMania.PauseScreen
@@ -48,14 +49,21 @@ executable cse230-project
         HaskMania.Settings
     -- other-extensions:
     build-depends:
+        attoparsec ^>=0.14.4,
         base ^>=4.17.2.0,
+        bytestring ^>=0.11.0,
+        conduit ^>=1.3.5,
+        conduit-extra ^>=1.3.6,
         containers ^>=0.6.7,
-        proteaaudio ^>= 0.10.1,
-        -- proteaaudio-sdl ^>= 0.10.1,
-        vty >= 6.1,
-        brick ^>= 2.1.1,
-        microlens-platform ^>= 0.4.3.4,
-        time ^>= 1.12.2,
-        mtl ^>= 2.3.1,
+        parser-combinators ^>=1.3.0,
+        proteaaudio ^>=0.10.1,
+        -- proteaaudio-sdl ^>=0.10.1,
+        vty >=6.1,
+        brick ^>=2.1.1,
+        microlens-platform ^>=0.4.3.4,
+        text ^>=2.0,
+        time ^>=1.12.2,
+        mtl ^>=2.3.1,
+        zip-stream ^>=0.2.2,
     hs-source-dirs:   app
     default-language: GHC2021

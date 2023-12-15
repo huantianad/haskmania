@@ -22,14 +22,17 @@ import Brick.Types qualified as T
 import Brick.Widgets.Center qualified as C
 import Brick.Widgets.Core ((<=>))
 import Brick.Widgets.Dialog qualified as D
+import Conduit (findC)
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Exception (bracket)
 import Control.Monad (forever, unless, void, when)
 import Control.Monad.State (MonadState)
+import Data.Conduit
 import Data.List (genericLength)
 import Data.Map qualified as DM
 import Graphics.Vty qualified as V
 import HaskMania.Data.Beatmap qualified as BM
+import HaskMania.Data.Parser (openBeatmapSet)
 import HaskMania.GameRow (Orientation (Horizontal, Vertical), RgbColor, RowElement (Block), drawRow, mixAlpha)
 import HaskMania.PauseScreen (pauseScreen)
 import HaskMania.Settings qualified as SG
@@ -319,8 +322,8 @@ soundThread bChan = forever $ do
   threadDelay 10_000
 
 data Args = Args
-  { beatmapFile :: String,
-    difficulty :: Float
+  { beatmapFile :: FilePath,
+    version :: String
   }
 
 -- TODO: parse command line arguments
@@ -328,15 +331,17 @@ parseCommandLine :: [String] -> IO (Maybe Args)
 parseCommandLine [] = return Nothing
 parseCommandLine (beatmapFile : args) = return $ Just (Args beatmapFile $ read $ head args)
 
-initBeatmap :: Args -> IO BM.Beatmap
-initBeatmap (Args beatmapFile difficulty) = do
-  -- beatmap <- parseBeatmap beatmapFile
-  -- choose map with closest star rating to difficulty
-  -- return beatmap
-  undefined
+loadBeatmap :: Args -> IO (Maybe BM.Beatmap)
+loadBeatmap (Args beatmapSetPath _starRating) =
+  runConduitRes $
+    openBeatmapSet beatmapSetPath
+      .| findC (const True)
 
 initApp :: Args -> IO ()
-initApp (Args beatmapFile _) = withSample "audio/test.ogg" $ \sample -> do
+initApp args = withSample "audio/test.ogg" $ \sample -> do
+  bm <- loadBeatmap args
+  print bm
+
   s <- SW.soundPlay sample
   tk <- initTimeKeeper s
   let ds = SG.defaultSettings
