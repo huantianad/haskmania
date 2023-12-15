@@ -1,7 +1,7 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
-module HaskMania.Data.Parser (openBeatmapSet) where
+module HaskMania.Data.Parser (openBeatmapSet, readFileFromBeatmapSet) where
 
 import Codec.Archive.Zip.Conduit.UnZip
 import Conduit
@@ -39,6 +39,26 @@ openBeatmapSet path =
     readBeatmap (Right _) = fail "unexpected contents"
 
     isBeatmap ZipEntry {zipEntryName} = either (T.isSuffixOf $ T.pack ".osu") (BS.isSuffixOf $ BS.pack ".osu") zipEntryName
+
+    write = await >>= maybe (return ()) block
+    block (Right r) = yield r >> write
+    block l = leftover l
+
+readFileFromBeatmapSet :: (MonadResource m, MonadThrow m, PrimMonad m, MonadFail m) => FilePath -> T.Text -> ConduitT a BS.ByteString m ()
+readFileFromBeatmapSet path filename =
+  sourceFile path
+    .| fmap snd (fuseBoth unZipStream readFiles)
+  where
+    readFiles = awaitForever readF
+
+    readF (Left ZipEntry {zipEntryName}) = do
+      if either (== filename) (== TE.encodeUtf8 filename) zipEntryName
+        then do
+          write
+        else do
+          void write
+      return ()
+    readF (Right _) = fail "unexpected contents"
 
     write = await >>= maybe (return ()) block
     block (Right r) = yield r >> write

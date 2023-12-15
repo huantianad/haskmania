@@ -28,13 +28,15 @@ import Control.Concurrent (forkIO, threadDelay)
 import Control.Exception (bracket)
 import Control.Monad (forever, unless, void, when)
 import Control.Monad.State (MonadState)
+import Data.ByteString (ByteString)
 import Data.Conduit
 import Data.List (genericLength)
 import Data.Map qualified as DM
+import Data.Maybe (fromMaybe)
 import Graphics.Vty qualified as V
 import HaskMania.Color (applyAlpha)
 import HaskMania.Data.Beatmap qualified as BM
-import HaskMania.Data.Parser (openBeatmapSet)
+import HaskMania.Data.Parser (openBeatmapSet, readFileFromBeatmapSet)
 import HaskMania.Feedback (Feedback (Notice), drawFeedback)
 import HaskMania.GameRow (Orientation (Horizontal, Vertical), RgbColor, RowElement (Block), drawRow)
 import HaskMania.PauseScreen (pauseScreen)
@@ -301,23 +303,23 @@ theApp =
 
 -- Perhaps split this into two bits in the future, one for audio system,
 -- one for sample. How important is sampleDestroy-ing the sample tho
-withSample :: String -> (PA.Sample -> IO ()) -> IO ()
-withSample filePath = bracket aquire release
+withSample :: IO PA.Sample -> (PA.Sample -> IO ()) -> IO ()
+withSample sample = bracket acquire release
   where
     -- \| This function initializes the audio system and plays a sample from a file.
     -- It takes the file path as an argument and returns a result indicating whether
     -- the audio system was successfully initialized.
-    aquire :: IO PA.Sample
-    aquire = do
+    acquire :: IO PA.Sample
+    acquire = do
       result <- PA.initAudio 64 48000 256
       unless result $ fail "Failed to initialize the audio system."
-      PA.sampleFromFile filePath 1.0
+      sample
 
     -- \| Releases the given audio sample.
     --   It destroys the sample and finishes the audio.
     release :: PA.Sample -> IO ()
-    release sample = do
-      result <- PA.sampleDestroy sample
+    release sample' = do
+      result <- PA.sampleDestroy sample'
       unless result $ fail "Failed to destroy sample."
       PA.finishAudio
 
@@ -329,7 +331,7 @@ soundThread bChan = forever $ do
   threadDelay 10_000
 
 data Args = Args
-  { beatmapFile :: FilePath,
+  { beatmapSetPath :: FilePath,
     version :: String
   }
 
@@ -344,20 +346,32 @@ loadBeatmap (Args beatmapSetPath _starRating) =
     openBeatmapSet beatmapSetPath
       .| findC (const True)
 
+loadBeatmapAudio :: Args -> BM.Beatmap -> IO (Maybe ByteString)
+loadBeatmapAudio (Args {beatmapSetPath}) bm =
+  runConduitRes $
+    readFileFromBeatmapSet beatmapSetPath ((BM.audioFilename . BM.info) bm)
+      -- TODO: rather than using findC we should be concatenating all of the ByteStrings
+      .| findC (const True)
+
 initApp :: Args -> IO ()
-initApp args = withSample "audio/test.ogg" $ \sample -> do
-  bm <- loadBeatmap args
+initApp args = do
+  bm <- fromMaybe (error "failed to find beatmap") <$> loadBeatmap args
   print bm
 
-  s <- SW.soundPlay sample
-  tk <- initTimeKeeper s
-  let ds = SG.defaultSettings
+  sampleBytes <-
+    fromMaybe (error "failed to find audio file")
+      <$> loadBeatmapAudio args bm
 
-  bChan <- newBChan 10
-  void $ forkIO $ soundThread bChan
+  withSample (PA.sampleFromMemory sampleBytes 1.0) $ \sample -> do
+    s <- SW.soundPlay sample
+    tk <- initTimeKeeper s
+    let ds = SG.defaultSettings
 
-  let state = initialState s tk ds
-  void $ M.customMainWithDefaultVty (Just bChan) theApp state
+    bChan <- newBChan 10
+    void $ forkIO $ soundThread bChan
+
+    let state = initialState s tk ds
+    void $ M.customMainWithDefaultVty (Just bChan) theApp state
 
 main :: IO ()
 main = do
