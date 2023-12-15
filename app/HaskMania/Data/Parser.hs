@@ -56,7 +56,7 @@ readFileFromBeatmapSet path filename =
         then do
           write
         else do
-          void write
+          write .| sinkNull
       return ()
     readF (Right _) = fail "unexpected contents"
 
