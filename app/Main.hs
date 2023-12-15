@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Main (main) where
 
@@ -33,6 +34,8 @@ import Data.Conduit
 import Data.List (genericLength)
 import Data.Map qualified as DM
 import Data.Maybe (fromMaybe)
+import Data.Ord (clamp)
+import GHC.List (foldl')
 import Graphics.Vty qualified as V
 import HaskMania.Color (applyAlpha)
 import HaskMania.Data.Beatmap qualified as BM
@@ -43,7 +46,7 @@ import HaskMania.PauseScreen (pauseScreen)
 import HaskMania.Settings qualified as SG
 import HaskMania.SoundW qualified as SW
 import HaskMania.TimeKeeper (TimeKeeper, getTime, initTimeKeeper, updateTime)
-import Lens.Micro.Platform (ix, makeLenses, use, zoom, (%=), (+=), (.=), (^.))
+import Lens.Micro.Platform (ix, makeLenses, use, zoom, (%=), (%~), (&), (+=), (.=), (^.))
 import Sound.ProteaAudio qualified as PA
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
@@ -119,8 +122,9 @@ drawUI d
       ]
   | otherwise =
       fmap (centerLayer . drawFeedback (d ^. currentTime)) (d ^. feedback)
-        ++ [ withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ show $ map (!! 0) (d ^. notes))
-               <=> withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ "Combo: " ++ show (d ^. scoreKeeper))
+        ++ [
+             -- withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ show $ map (!! 0) (d ^. notes))
+             withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ "Combo: " ++ show (d ^. scoreKeeper))
                <=> withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ "Average: " ++ show (average (d ^. (scoreKeeper . hitOffsets)) :: Double)),
              withDefAttr (attrName "background") $ center $ combine stuff,
              withDefAttr (attrName "background") (fill ' ')
@@ -259,14 +263,14 @@ removeOldNotes :: Double -> [Double] -> ([Double], Bool)
 removeOldNotes _ [] = ([], False)
 removeOldNotes pos (x : xs) = if x < (pos - 0.250) then (fst (removeOldNotes pos xs), True) else (x : xs, False)
 
-initialState :: SW.SoundW -> TimeKeeper -> SG.MySettings -> MyState
-initialState s tk ds =
+initialState :: SW.SoundW -> TimeKeeper -> SG.MySettings -> [[Double]] -> MyState
+initialState s tk ds n =
   MyState
     { _currentTime = 0,
       _settings = ds,
       _sound = s,
       _timeKeeper = tk,
-      _notes = map timesBeats [[0, 4 ..], [1, 5 ..], [2, 6 ..], [3, 7 ..]],
+      _notes = n,
       _scoreKeeper =
         ScoreKeeper
           { _score = 0,
@@ -277,9 +281,6 @@ initialState s tk ds =
           },
       _feedback = [Notice (132, 204, 22) "LMAO" 0]
     }
-  where
-    timesBeats :: [Integer] -> [Double]
-    timesBeats = map (\i -> fromIntegral i / fromIntegral bpm * 60 / 2)
 
 theMap :: A.AttrMap
 theMap =
@@ -358,6 +359,29 @@ loadBeatmapAndAudio args = do
   sampleBytes <- loadBeatmapAudio args bm
   return (bm, sampleBytes)
 
+-- Converts an osu!mania beatmap's hitobject data into a simplified representation.
+-- The resulting 2D array represents each lane as a row,
+-- where the values in the row are positions of notes in seconds.
+beatmapToNotes :: BM.Beatmap -> [[Double]]
+beatmapToNotes beatmap =
+  let hitObjects = BM.objects beatmap
+      colCount = 4
+
+      posToColIdx :: BM.Position -> Int
+      posToColIdx (x, _) = clamp (0, colCount - 1) $ x * colCount `div` 512
+
+      hitObjToNote :: BM.HitObject -> Maybe (Int, Double)
+      hitObjToNote BM.HitObject {BM.position = pos, BM.kind = kind, BM.time = BM.Milliseconds time} = case kind of
+        BM.Circle _ -> Just (posToColIdx pos, fromIntegral time / 1000)
+        BM.Hold _ -> Just (posToColIdx pos, fromIntegral time / 1000)
+        _ -> Nothing
+
+      foldFunc :: [[Double]] -> BM.HitObject -> [[Double]]
+      foldFunc base new = case hitObjToNote new of
+        Nothing -> base
+        Just (col, time) -> base & ix col %~ (time :)
+   in map reverse $ foldl' foldFunc (replicate colCount []) hitObjects
+
 initApp :: Args -> IO ()
 initApp args = do
   (bm, sampleBytes) <- loadBeatmapAndAudio args
@@ -366,12 +390,12 @@ initApp args = do
     s <- SW.soundPlay sample
     tk <- initTimeKeeper s
     let ds = SG.defaultSettings
+    let n = beatmapToNotes bm
 
     bChan <- newBChan 10
     void $ forkIO $ soundThread bChan
 
-    let state = initialState s tk ds
-    void $ M.customMainWithDefaultVty (Just bChan) theApp state
+    void $ M.customMainWithDefaultVty (Just bChan) theApp $ initialState s tk ds n
 
 main :: IO ()
 main = do
