@@ -19,6 +19,7 @@ import Brick.BChan
 import Brick.Main qualified as M
 import Brick.Types (BrickEvent (..))
 import Brick.Types qualified as T
+import Brick.Widgets.Center (centerLayer)
 import Brick.Widgets.Center qualified as C
 import Brick.Widgets.Core ((<=>))
 import Brick.Widgets.Dialog qualified as D
@@ -31,9 +32,11 @@ import Data.Conduit
 import Data.List (genericLength)
 import Data.Map qualified as DM
 import Graphics.Vty qualified as V
+import HaskMania.Color (applyAlpha)
 import HaskMania.Data.Beatmap qualified as BM
 import HaskMania.Data.Parser (openBeatmapSet)
-import HaskMania.GameRow (Orientation (Horizontal, Vertical), RgbColor, RowElement (Block), drawRow, mixAlpha)
+import HaskMania.Feedback (Feedback (Notice), drawFeedback)
+import HaskMania.GameRow (Orientation (Horizontal, Vertical), RgbColor, RowElement (Block), drawRow)
 import HaskMania.PauseScreen (pauseScreen)
 import HaskMania.Settings qualified as SG
 import HaskMania.SoundW qualified as SW
@@ -74,7 +77,8 @@ data MyState = MyState
     _sound :: SW.SoundW,
     _timeKeeper :: TimeKeeper,
     _notes :: [[Double]],
-    _scoreKeeper :: ScoreKeeper
+    _scoreKeeper :: ScoreKeeper,
+    _feedback :: [Feedback]
   }
 
 makeLenses ''MyState
@@ -112,12 +116,13 @@ drawUI d
       [ withDefAttr (attrName "background") (withAttr D.buttonAttr pauseScreen)
       ]
   | otherwise =
-      [ withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ show $ map (!! 0) (d ^. notes))
-          <=> withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ "Combo: " ++ show (d ^. scoreKeeper))
-          <=> withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ "Average: " ++ show (average (d ^. (scoreKeeper . hitOffsets)))),
-        withDefAttr (attrName "background") $ center $ combine stuff,
-        withDefAttr (attrName "background") (fill ' ')
-      ]
+      fmap (centerLayer . drawFeedback 0.3) (d ^. feedback)
+        ++ [ withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ show $ map (!! 0) (d ^. notes))
+               <=> withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ "Combo: " ++ show (d ^. scoreKeeper))
+               <=> withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ "Average: " ++ show (average (d ^. (scoreKeeper . hitOffsets)) :: Double)),
+             withDefAttr (attrName "background") $ center $ combine stuff,
+             withDefAttr (attrName "background") (fill ' ')
+           ]
   where
     combine = case rowOrientation of
       Horizontal -> vBox
@@ -132,7 +137,7 @@ drawUI d
     drawRow' :: RgbColor -> [Double] -> Maybe Char -> Widget ()
     drawRow' color noteTimes char = T.Widget T.Fixed T.Fixed $ do
       context <- T.getContext
-      let elements = map (Block (mixAlpha 1 color) 1 . (* fromIntegral scrollSpeed)) noteTimes
+      let elements = map (Block (applyAlpha 1 color) 1 . (* fromIntegral scrollSpeed)) noteTimes
 
       T.render $ drawRow rowOrientation (context ^. getSize) (posWithVisualOffset d * fromIntegral scrollSpeed) color elements char
 
@@ -266,7 +271,8 @@ initialState s tk ds =
             _highestCombo = 0,
             _previousHitJudgement = Immaculate,
             _hitOffsets = []
-          }
+          },
+      _feedback = [Notice (132, 204, 22) "GREAT" 0]
     }
   where
     timesBeats :: [Integer] -> [Double]

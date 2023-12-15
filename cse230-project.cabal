@@ -40,8 +40,10 @@ executable cse230-project
     import:           options
     main-is:          Main.hs
     other-modules:
+        HaskMania.Color
         HaskMania.Data.Beatmap
         HaskMania.Data.Parser
+        HaskMania.Feedback
         HaskMania.GameRow
         HaskMania.TimeKeeper
         HaskMania.PauseScreen

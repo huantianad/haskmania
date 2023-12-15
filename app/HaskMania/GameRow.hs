@@ -1,33 +1,12 @@
-module HaskMania.GameRow (RowElement (Block), drawRow, RgbColor, RgbaColor, Orientation (Vertical, Horizontal), mixAlpha) where
+module HaskMania.GameRow (RowElement (Block), drawRow, RgbColor, RgbaColor, Orientation (Vertical, Horizontal)) where
 
-import Brick (Widget, hBox, modifyDefAttr, str, vBox)
-import Graphics.Vty (Color (RGBColor), withBackColor, withForeColor)
-
-type RgbColor = (Double, Double, Double)
-
-type RgbaColor = (Double, Double, Double, Double)
+import Brick (Widget, hBox, str, vBox)
+import HaskMania.Color (RgbColor, RgbaColor, applyAlpha, overlay, withColor)
 
 -- Block: color length position
 data RowElement = Block RgbaColor Double Double
 
 data Orientation = Vertical | Horizontal
-
-toRGBColor :: RgbColor -> Color
-toRGBColor (r, g, b) = RGBColor (floor r) (floor g) (floor b)
-
--- Applies a transparent color on top of a base color
-overlay :: RgbaColor -> RgbColor -> RgbColor
-overlay (r', g', b', alpha) (r, g, b) =
-  ( r * (1 - alpha) + r' * alpha,
-    g * (1 - alpha) + g' * alpha,
-    b * (1 - alpha) + b' * alpha
-  )
-
-mixAlpha :: Double -> RgbColor -> RgbaColor
-mixAlpha alpha (r, g, b) = (r, g, b, alpha)
-
-withColor :: RgbColor -> RgbColor -> Widget n -> Widget n
-withColor back fore = modifyDefAttr (\a -> withBackColor (withForeColor a (toRGBColor fore)) (toRGBColor back))
 
 blockChar :: Orientation -> Double -> Char
 blockChar orientation fraction = case orientation of
@@ -51,8 +30,7 @@ drawRow orientation size offset rowColor elements char = combine $ do
     Horizontal -> [0 .. (fromIntegral size - 1)]
     Vertical -> reverse [0 .. (fromIntegral size - 1)]
   let background =
-        overlay (255, 255, 255, if i == 2 then 0.5 else 0) $
-          overlay (mixAlpha ((1 - i / fromIntegral size) * 0.3 + 0.05) rowColor) (0, 0, 0)
+        (0, 0, 0) `overlay` applyAlpha ((1 - i / fromIntegral size) * 0.3 + 0.05) rowColor `overlay` (255, 255, 255, if i == 2 then 0.5 else 0)
   let right =
         findElement
           (offset + fromIntegral size)
@@ -75,10 +53,10 @@ drawRow orientation size offset rowColor elements char = combine $ do
     (Nothing, Nothing) -> case (i, char) of
       (0, Just c) -> withColor background rowColor (str [c])
       _ -> withColor background background (str " ")
-    (Nothing, Just (fraction, color)) -> withColor (overlay color background) background (str [blockChar orientation fraction])
-    (Just (fraction, color), Nothing) -> withColor background (overlay color background) (str [blockChar orientation fraction])
+    (Nothing, Just (fraction, color)) -> withColor (overlay background color) background (str [blockChar orientation fraction])
+    (Just (fraction, color), Nothing) -> withColor background (overlay background color) (str [blockChar orientation fraction])
     -- In the case of a conflict, I'm arbitrarily letting the left one win
-    (Just (fraction, leftColor), Just (_, rightColor)) -> withColor (overlay rightColor background) (overlay leftColor background) (str [blockChar orientation fraction])
+    (Just (fraction, leftColor), Just (_, rightColor)) -> withColor (overlay background rightColor) (overlay background leftColor) (str [blockChar orientation fraction])
   where
     combine = case orientation of
       Horizontal -> hBox
