@@ -73,7 +73,14 @@ beatmap = do
       <*> toPermutation beatmapDifficulty
       <*> toPermutation beatmapEvents
       <*> toPermutation beatmapTimings
-      <*> toPermutation beatmapColors
+      <*> toPermutationWithDefault
+        ( B.BeatmapColors
+            { B.combos = Map.empty,
+              B.sliderTrackOverride = Nothing,
+              B.sliderBorder = Nothing
+            }
+        )
+        beatmapColors
       <*> toPermutation beatmapObjects
   where
     cons
