@@ -5,9 +5,11 @@ module HaskMania.Data.Parser (openBeatmapSet) where
 
 import Codec.Archive.Zip.Conduit.UnZip
 import Conduit
-import Control.Applicative ((<|>))
+import Control.Applicative (Applicative (liftA2), (<|>))
 import Control.Applicative.Permutations
 import Data.Attoparsec.ByteString.Char8
+import Data.Attoparsec.Text qualified as APT
+import Data.Bits ((.&.))
 import Data.ByteString.Char8 qualified as BS hiding (takeWhile)
 import Data.Conduit.Attoparsec (sinkParser)
 import Data.Functor
@@ -15,8 +17,9 @@ import Data.Map qualified as Map
 import Data.Text qualified as T
 import Data.Text.Encoding as TE
 import Data.Text.IO qualified as TIO
+import Data.Word (Word8)
 import HaskMania.Data.Beatmap qualified as B
-import Prelude hiding (takeWhile)
+import Prelude hiding (length, takeWhile)
 
 openBeatmapSet :: (MonadResource m, PrimMonad m, MonadThrow m, MonadFail m) => FilePath -> ConduitT () B.Beatmap m ()
 openBeatmapSet path =
@@ -45,7 +48,7 @@ beatmap :: Parser B.Beatmap
 beatmap = do
   ver <- header
   runPermutation $
-    ctor ver
+    cons ver
       <$> toPermutation beatmapInfo
       <*> toPermutation beatmapEditor
       <*> toPermutation beatmapMetadata
@@ -55,7 +58,7 @@ beatmap = do
       <*> toPermutation beatmapColors
       <*> toPermutation beatmapObjects
   where
-    ctor
+    cons
       formatVersion
       info
       editor
@@ -101,24 +104,35 @@ colonspace :: Parser ()
 colonspace = colon >> char ' ' $> ()
 
 spacecolonspace :: Parser ()
-spacecolonspace = char ' ' $> colonspace $> ()
+spacecolonspace = char ' ' >> colonspace
 
 parseKV :: Parser () -> String -> Parser a -> Parser a
 parseKV sep key parser = do
   void $ literal key
-  void sep
+  sep
   res <- parser
-  void skipSpace
+  skipSpace
   return res
+
+(<||>) :: (Applicative f) => f Bool -> f Bool -> f Bool
+(<||>) = liftA2 (||)
 
 bool :: Parser Bool
 bool = (char '0' $> False) <|> (char '1' $> True)
 
 str :: Parser T.Text
-str = takeWhile (\c -> c /= '\n' && c /= '\r') <&> TE.decodeUtf8
+str = takeTill APT.isEndOfLine <&> TE.decodeUtf8
 
 time :: Parser B.Time
 time = signed decimal <&> B.Milliseconds
+
+percent :: Parser B.Percent
+percent = decimal <&> B.Percent
+
+strList :: Char -> Parser [T.Text]
+strList sep = item `sepBy` char sep
+  where
+    item = takeTill ((== sep) <||> APT.isEndOfLine) <&> TE.decodeUtf8
 
 overlayPos :: Parser B.OverlayPosition
 overlayPos =
@@ -131,7 +145,7 @@ beatmapInfo =
   do
     void $ sectionHeader "General"
     runPermutation $
-      ctor
+      cons
         <$> kv "AudioFilename" str
         <*> kvDef "AudioLeadIn" time (B.Milliseconds 0)
         <*> kvDef "PreviewTime" time (B.Milliseconds (-1))
@@ -153,7 +167,7 @@ beatmapInfo =
     kv k v = toPermutation $ kvP k v
     kvDef k v def = toPermutationWithDefault def $ kvP k v
 
-    ctor
+    cons
       audioFilename
       audioLeadIn
       previewTime
@@ -193,7 +207,7 @@ beatmapEditor :: Parser B.BeatmapEditorSettings
 beatmapEditor = do
   void $ sectionHeader "Editor"
   runPermutation $
-    ctor
+    cons
       <$> kvDef "Bookmarks" (time `sepBy` char ',') []
       <*> kv "DistanceSpacing" double
       <*> kv "BeatDivisor" decimal
@@ -204,7 +218,7 @@ beatmapEditor = do
     kv k v = toPermutation $ kvP k v
     kvDef k v def = toPermutationWithDefault def $ kvP k v
 
-    ctor
+    cons
       bookmarks
       distanceSpacing
       beatDivisor
@@ -222,7 +236,7 @@ beatmapMetadata :: Parser B.BeatmapMetadata
 beatmapMetadata = do
   void $ sectionHeader "Metadata"
   runPermutation $
-    ctor
+    cons
       <$> kv "TitleUnicode" str
       <*> kv "Title" str
       <*> kv "ArtistUnicode" str
@@ -230,14 +244,14 @@ beatmapMetadata = do
       <*> kv "Creator" str
       <*> kv "Version" str
       <*> kv "Source" str
-      <*> kv "Tags" (str `sepBy` char ' ')
+      <*> kv "Tags" (strList ' ')
       <*> kv "BeatmapID" decimal
       <*> kv "BeatmapSetID" decimal
   where
     kvP = parseKV colon
     kv k v = toPermutation $ kvP k v
 
-    ctor
+    cons
       title
       titleRomanized
       artist
@@ -262,31 +276,258 @@ beatmapMetadata = do
           }
 
 beatmapDifficulty :: Parser B.BeatmapDifficulty
-beatmapDifficulty =
-  return
-    B.BeatmapDifficulty
-      { B.hpDrainRate = 0,
-        B.circleSize = 0,
-        B.overallDifficulty = 0,
-        B.approachRate = 0,
-        B.sliderBaseVelocity = 0,
-        B.sliderTicksPerBeat = 0
-      }
+beatmapDifficulty = do
+  void $ sectionHeader "Difficulty"
+  runPermutation $
+    cons
+      <$> kv "HPDrainRate" double
+      <*> kv "CircleSize" double
+      <*> kv "OverallDifficulty" double
+      <*> kv "ApproachRate" double
+      <*> kv "SliderMultiplier" double
+      <*> kv "SliderTickRate" double
+  where
+    kvP = parseKV colon
+    kv k v = toPermutation $ kvP k v
+
+    cons
+      hpDrainRate
+      circleSize
+      overallDifficulty
+      approachRate
+      sliderBaseVelocity
+      sliderTicksPerBeat =
+        B.BeatmapDifficulty
+          { B.hpDrainRate,
+            B.circleSize,
+            B.overallDifficulty,
+            B.approachRate,
+            B.sliderBaseVelocity,
+            B.sliderTicksPerBeat
+          }
 
 beatmapEvents :: Parser [B.BeatmapEvent]
-beatmapEvents = return []
+beatmapEvents = do
+  void $ sectionHeader "Events"
+  -- currently unimplemented; skip to next section
+  void $ takeTill (== '[')
+  return []
 
 beatmapTimings :: Parser [B.TimingPoint]
-beatmapTimings = return []
+beatmapTimings = do
+  void $ sectionHeader "TimingPoints"
+  res <- timingPoint `sepBy` skipSpace
+  skipSpace
+  return res
 
-beatmapColors :: Parser B.BeatmapColors
-beatmapColors =
-  return
-    B.BeatmapColors
-      { B.combos = Map.empty,
-        B.sliderTrackOverride = Nothing,
-        B.sliderBorder = Nothing
+timingPoint :: Parser B.TimingPoint
+timingPoint = do
+  startTime <- time
+  void $ char ','
+  beatLength <- double
+  void $ char ','
+  meter <- decimal
+  void $ char ','
+  sampleSet <- decimal
+  void $ char ','
+  sampleIndex <- decimal
+  void $ char ','
+  volume <- percent
+  void $ char ','
+  uninherited <- bool
+  void $ char ','
+  effects <- timingPointEffects
+
+  return $
+    B.TimingPoint
+      { time = startTime,
+        beatLength,
+        meter,
+        sampleSet,
+        sampleIndex,
+        volume,
+        isInherited = not uninherited,
+        effects
       }
 
+timingPointEffects :: Parser B.TimingPointEffects
+timingPointEffects = do
+  b <- decimal :: Parser Word8
+  return $
+    B.TimingPointEffects
+      { B.isKiaiTime = b .&. 0b00000001 /= 0,
+        B.omitFirstBarline = b .&. 0b00001000 /= 0
+      }
+
+beatmapColors :: Parser B.BeatmapColors
+beatmapColors = do
+  void $ sectionHeader "Colours"
+  combos <- many' $ combo sep
+  runPermutation $
+    cons
+      combos
+      <$> kvDef "SliderTrackOverride" (Just <$> color) Nothing
+      <*> kvDef "SliderBorder" (Just <$> color) Nothing
+  where
+    sep = spacecolonspace
+    kvP = parseKV sep
+    kvDef k v def = toPermutationWithDefault def $ kvP k v
+
+    cons
+      combos
+      sliderTrackOverride
+      sliderBorder =
+        B.BeatmapColors
+          { B.combos = Map.fromList combos,
+            B.sliderTrackOverride,
+            B.sliderBorder
+          }
+
+color :: Parser B.Color
+color = do
+  r <- decimal
+  void $ char ','
+  g <- decimal
+  void $ char ','
+  b <- decimal
+
+  return (r, g, b)
+
+combo :: Parser () -> Parser (Int, B.Color)
+combo sep = do
+  void $ literal "Combo"
+  index <- decimal
+  sep
+  color' <- color
+  skipSpace
+
+  return (index, color')
+
 beatmapObjects :: Parser [B.HitObject]
-beatmapObjects = return []
+beatmapObjects = do
+  void $ sectionHeader "HitObjects"
+  res <- hitObject `sepBy` skipSpace
+  skipSpace
+  return res
+
+hitObject :: Parser B.HitObject
+hitObject = do
+  x <- decimal
+  void $ char ','
+  y <- decimal
+  void $ char ','
+  startTime <- time
+  void $ char ','
+  ty <- decimal :: Parser Word8
+  void $ char ','
+  sounds <- hitSounds
+  void $ char ','
+  kind <- remainder ty
+  sample <- hitSample
+
+  return
+    B.HitObject
+      { B.position = (x, y),
+        B.time = startTime,
+        B.kind,
+        B.sounds,
+        B.sample
+      }
+  where
+    remainder ty
+      | ty .&. 0b00000001 /= 0 = do
+          B.Circle <$> circleParams
+      | ty .&. 0b00000010 /= 0 = do
+          params <- sliderParams
+          void $ char ','
+          return $ B.Slider params
+      | ty .&. 0b00001000 /= 0 = do
+          params <- spinnerParams
+          void $ char ','
+          return $ B.Spinner params
+      | ty .&. 0b10000000 /= 0 = do
+          params <- holdParams
+          void $ char ':'
+          return $ B.Hold params
+      | otherwise = error $ "unknown hit object type: " ++ show ty
+
+circleParams :: Parser B.CircleParams
+circleParams = return B.CircleParams
+
+sliderParams :: Parser B.SliderParams
+sliderParams = do
+  curveType <- ty
+  void $ char '|'
+  points <- point `sepBy` char '|'
+  void $ char ','
+  numSlides <- decimal
+  void $ char ','
+  length <- double
+  void $ char ','
+  edgeSounds <- decimal `sepBy` char '|'
+  void $ char ','
+  edgeSets <- strList '|'
+
+  return $
+    B.SliderParams
+      { B.curveType,
+        B.points,
+        B.numSlides,
+        B.length,
+        B.edgeSounds,
+        B.edgeSets
+      }
+  where
+    point = do
+      x <- decimal
+      void $ char ':'
+      y <- decimal
+      return (x, y)
+
+    ty =
+      (char 'L' $> B.Linear)
+        <|> (char 'B' $> B.Bezier)
+        <|> (char 'C' $> B.Catmull)
+        <|> (char 'P' $> B.Circular)
+
+spinnerParams :: Parser B.SpinnerParams
+spinnerParams = do
+  endTime <- time
+  return $ B.SpinnerParams {B.endTime}
+
+holdParams :: Parser B.HoldParams
+holdParams = do
+  endTime <- time
+  return $ B.HoldParams {B.endTime}
+
+hitSounds :: Parser B.HitSounds
+hitSounds = do
+  b <- decimal :: Parser Word8
+  return $
+    B.HitSounds
+      { normal = b .&. 0b00000001 /= 0,
+        whistle = b .&. 0b00000010 /= 0,
+        finish = b .&. 0b00000100 /= 0,
+        clap = b .&. 0b00001000 /= 0
+      }
+
+hitSample :: Parser B.HitSample
+hitSample = do
+  normalSet <- decimal
+  void $ char ':'
+  additionSet <- decimal
+  void $ char ':'
+  index <- decimal
+  void $ char ':'
+  volume <- percent
+  void $ char ':'
+  filename <- str
+
+  return
+    B.HitSample
+      { B.normalSet,
+        B.additionSet,
+        B.index,
+        B.volume,
+        B.filename
+      }

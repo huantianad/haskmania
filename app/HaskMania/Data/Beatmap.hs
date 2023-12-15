@@ -7,10 +7,11 @@ module HaskMania.Data.Beatmap where
 
 import Data.Map (Map)
 import Data.Text (Text)
+import Data.Word (Word8)
 
 type Position = (Int, Int)
 
-type Color = (Int, Int, Int)
+type Color = (Word8, Word8, Word8)
 
 newtype Time = Milliseconds Int
   deriving (Show)
