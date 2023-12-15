@@ -35,6 +35,7 @@ import Data.List (genericLength)
 import Data.Map qualified as DM
 import Data.Maybe (fromMaybe)
 import Data.Ord (clamp)
+import Data.Text qualified as Text
 import GHC.List (foldl')
 import Graphics.Vty qualified as V
 import HaskMania.Color (applyAlpha)
@@ -47,9 +48,8 @@ import HaskMania.Settings qualified as SG
 import HaskMania.SoundW qualified as SW
 import HaskMania.TimeKeeper (TimeKeeper, getTime, initTimeKeeper, updateTime)
 import Lens.Micro.Platform (ix, makeLenses, use, zoom, (%=), (%~), (&), (+=), (.=), (^.))
+import Options.Applicative qualified as O
 import Sound.ProteaAudio qualified as PA
-import System.Environment (getArgs)
-import System.Exit (exitFailure)
 
 data Judgement = Immaculate | GoodEnough | Whatever | Bleh deriving (Show, Eq)
 
@@ -336,16 +336,13 @@ data Args = Args
     version :: String
   }
 
--- TODO: parse command line arguments
-parseCommandLine :: [String] -> IO (Maybe Args)
-parseCommandLine [] = return Nothing
-parseCommandLine (beatmapFile : args) = return $ Just (Args beatmapFile $ read $ head args)
-
 loadBeatmap :: Args -> IO (Maybe BM.Beatmap)
-loadBeatmap (Args beatmapSetPath _starRating) =
+loadBeatmap (Args {beatmapSetPath, version}) =
   runConduitRes $
     openBeatmapSet beatmapSetPath
-      .| findC (const True)
+      .| findC (fuzzyMatch (Text.pack version) . BM.version . BM.metadata)
+  where
+    fuzzyMatch query = Text.isInfixOf (Text.toCaseFold query) . Text.toCaseFold
 
 loadBeatmapAudio :: Args -> BM.Beatmap -> IO ByteString
 loadBeatmapAudio (Args {beatmapSetPath}) bm =
@@ -397,13 +394,30 @@ initApp args = do
 
     void $ M.customMainWithDefaultVty (Just bChan) theApp $ initialState s tk ds n
 
+argsP :: O.Parser Args
+argsP =
+  Args
+    <$> O.argument
+      O.str
+      ( O.metavar "FILE"
+          <> O.help "beatmap set to load"
+      )
+    <*> O.argument
+      O.str
+      ( O.metavar "VERSION"
+          <> O.help "beatmap version to load from set"
+      )
+
+cli :: O.ParserInfo Args
+cli =
+  O.info
+    (argsP O.<**> O.helper)
+    ( O.fullDesc
+        <> O.header "HaskMania"
+        <> O.progDesc "a VSRG implemented on the command line"
+    )
+
 main :: IO ()
 main = do
-  myArgs <- getArgs >>= parseCommandLine
-  case myArgs of
-    Nothing -> do
-      putStrLn "Usage: ./cse230-project <beatmap> <difficulty>"
-      exitFailure
-    Just args -> do
-      -- beatmap <- initBeatmap args
-      initApp args
+  args <- O.execParser cli
+  initApp args

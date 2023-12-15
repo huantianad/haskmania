@@ -57,6 +57,7 @@ executable cse230-project
         conduit ^>=1.3.5,
         conduit-extra ^>=1.3.6,
         containers ^>=0.6.7,
+        optparse-applicative ^>=0.18.1,
         parser-combinators ^>=1.3.0,
         proteaaudio ^>=0.10.1,
         -- proteaaudio-sdl ^>=0.10.1,
