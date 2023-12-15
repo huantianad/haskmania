@@ -33,6 +33,12 @@ Here are some sample beatmap files we used. For copyright reasons, they are not 
 - [171421 M2U - Quo Vadis.osz](https://cdn.discordapp.com/attachments/1157417217865023559/1185268920253423686/171421_M2U_-_Quo_Vadis.osz)
 - [1301740 M2U - Promise feat. Sherie.osz](https://cdn.discordapp.com/attachments/1157417217865023559/1185286890862162050/1301740_M2U_-_Promise_feat._Sherie.osz)
 
+For example, the following will play Quo Vadis with insane difficulty.
+
+```shell
+$ cabal run . -- 171421_M2U_-_Quo_Vadis.osz insane
+```
+
 ## Members
 
 - David Li (A17966279, [huantianad](https://github.com/huantianad))

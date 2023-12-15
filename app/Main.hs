@@ -304,7 +304,7 @@ initialState s tk ds n =
             _hitOffsets = [],
             _judgementsMap = DM.fromList $ map (,0) [minBound .. maxBound]
           },
-      _feedback = [Notice (0, 0, 0) "BEGIN" 0]
+      _feedback = [Notice (255, 255, 255) "BEGIN" 0]
     }
 
 theMap :: A.AttrMap
