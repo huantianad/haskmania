@@ -116,7 +116,7 @@ drawUI d
       [ withDefAttr (attrName "background") (withAttr D.buttonAttr pauseScreen)
       ]
   | otherwise =
-      fmap (centerLayer . drawFeedback 0.3) (d ^. feedback)
+      fmap (centerLayer . drawFeedback (d ^. currentTime)) (d ^. feedback)
         ++ [ withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ show $ map (!! 0) (d ^. notes))
                <=> withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ "Combo: " ++ show (d ^. scoreKeeper))
                <=> withDefAttr (attrName "background") (withAttr D.buttonAttr $ str $ "Average: " ++ show (average (d ^. (scoreKeeper . hitOffsets)) :: Double)),
@@ -141,18 +141,19 @@ drawUI d
 
       T.render $ drawRow rowOrientation (context ^. getSize) (posWithVisualOffset d * fromIntegral scrollSpeed) color elements char
 
-    stuff = do
-      let s = d ^. settings
-      ((V.KChar char, color), blocks) <-
-        zip
-          [ (s ^. SG.columnOneKey, (255, 255, 0)),
-            (s ^. SG.columnTwoKey, (0, 255, 255)),
-            (s ^. SG.columnThreeKey, (255, 0, 255)),
-            (s ^. SG.columnFourKey, (0, 255, 0))
-          ]
-          (d ^. notes)
-      let row = drawRow' color blocks
-      str " " : replicate rowPadding (row Nothing) ++ [row (Just char)] ++ replicate rowPadding (row Nothing) ++ [str " "]
+    stuff =
+      str " " : do
+        let s = d ^. settings
+        ((V.KChar char, color), blocks) <-
+          zip
+            [ (s ^. SG.columnOneKey, (255, 255, 0)),
+              (s ^. SG.columnTwoKey, (0, 255, 255)),
+              (s ^. SG.columnThreeKey, (255, 0, 255)),
+              (s ^. SG.columnFourKey, (0, 255, 0))
+            ]
+            (d ^. notes)
+        let row = drawRow' color blocks
+        replicate rowPadding (row Nothing) ++ [row (Just char)] ++ replicate rowPadding (row Nothing) ++ [str " "]
 
 appEvent :: BrickEvent () Tick -> T.EventM () MyState ()
 appEvent (VtyEvent ev) =
@@ -272,7 +273,7 @@ initialState s tk ds =
             _previousHitJudgement = Immaculate,
             _hitOffsets = []
           },
-      _feedback = [Notice (132, 204, 22) "GREAT" 0]
+      _feedback = [Notice (132, 204, 22) "LMAO" 0]
     }
   where
     timesBeats :: [Integer] -> [Double]

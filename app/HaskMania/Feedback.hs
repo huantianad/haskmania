@@ -17,11 +17,24 @@ data Feedback = Notice RgbColor String Time
 data AnimationState = Visible | AnimateIn Double | AnimateOut Double | Hidden
   deriving (Eq, Show)
 
+background :: RgbColor
+background = (0, 0, 0)
+
 duration :: Time
-duration = 2
+duration = 1
 
 transition :: Time
-transition = 0.5
+transition = 0.3
+
+-- | i copy from https://sheeptester.github.io/javascripts/easing.html
+easeInOutCubic :: Double -> Double
+easeInOutCubic t =
+  let t' = t * 2
+   in if t' < 1
+        then t' * t' * t' / 2
+        else
+          let t'' = t' - 2
+           in (t'' * t'' * t'' + 2) / 2
 
 -- | t is relative to the animation start time
 getAnimationState :: Time -> AnimationState
@@ -30,9 +43,6 @@ getAnimationState t
   | t >= duration - transition && t < duration = AnimateOut (1 - (duration - t) / transition)
   | t >= 0 && t < duration = Visible
   | otherwise = Hidden
-
-background :: RgbColor
-background = (0, 0, 0)
 
 -- | this will be useful for clearing feedback that is done
 feedbackVisible :: Time -> Feedback -> Bool
@@ -43,8 +53,8 @@ drawFeedback t (Notice color text start) =
   case getAnimationState (t - start) of
     Hidden -> emptyWidget
     Visible -> box
-    AnimateIn progress -> cropLeftBy (floor $ totalWidth * progress) box
-    AnimateOut progress -> cropRightBy (floor $ totalWidth * progress) box
+    AnimateIn progress -> cropLeftBy (floor $ totalWidth * easeInOutCubic progress) box
+    AnimateOut progress -> cropRightBy (floor $ totalWidth * easeInOutCubic progress) box
   where
     spacedText = intersperse ' ' text
     totalWidth = fromIntegral (length spacedText + 6)
