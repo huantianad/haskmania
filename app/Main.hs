@@ -72,6 +72,7 @@ data ScoreKeeper = ScoreKeeper
     _currentCombo :: Int,
     _highestCombo :: Int,
     _previousHitJudgement :: Judgement,
+    _accuracy :: Double,
     _hitOffsets :: [Int],
     _judgementsMap :: DM.Map Judgement Int
   }
@@ -131,6 +132,7 @@ drawUI d
                       ++ show (noteCount d * 3)
                   )
                 <=> str ("Combo: " ++ show (d ^. (scoreKeeper . highestCombo)) ++ "/" ++ show (noteCount d))
+                <=> str ("Accuracy: " ++ show (d ^. (scoreKeeper . accuracy)) ++ "%")
                 <=> str "Hits:"
                 <=> vBox
                   ( do
@@ -247,6 +249,24 @@ updateScore judgement = do
 
   judgementsMap . at judgement %= Just . (+ 1) . fromJust
 
+  -- accuracy is defined as 3 * number of Immaculates + 2 * number of GoodEnoughs
+  -- + 1 * number of Whatevers / 3 * total number of notes
+  judgementsMap' <- use judgementsMap
+  let totalNotes = sum $ DM.elems judgementsMap'
+  accuracy
+    .= roundTo
+      2
+      ( ( 3 * fromIntegral (fromMaybe 0 (judgementsMap' ^. at Immaculate))
+            + 2 * fromIntegral (fromMaybe 0 (judgementsMap' ^. at GoodEnough))
+            + fromIntegral (fromMaybe 0 (judgementsMap' ^. at Whatever))
+        )
+          / (3 * fromIntegral totalNotes)
+          * 100
+      )
+  where
+    roundTo :: Int -> Double -> Double
+    roundTo n x = fromIntegral (truncate $ x * 10 ^ n) / 10 ^ n
+
 createFeedback :: Judgement -> Double -> Feedback
 createFeedback Bleh = Notice (248, 113, 113) "BLEH"
 createFeedback Whatever = Notice (250, 204, 21) "WHATEVER"
@@ -320,6 +340,7 @@ initialState s tk ds n =
             _highestCombo = 0,
             _previousHitJudgement = Immaculate,
             _hitOffsets = [],
+            _accuracy = 0,
             _judgementsMap = DM.fromList $ map (,0) [minBound .. maxBound]
           },
       _feedback = [Notice (255, 255, 255) "BEGIN" 0]
