@@ -98,7 +98,7 @@ colon :: Parser ()
 colon = char ':' $> ()
 
 colonspace :: Parser ()
-colonspace = colon $> char ' ' $> ()
+colonspace = colon >> char ' ' $> ()
 
 spacecolonspace :: Parser ()
 spacecolonspace = char ' ' $> colonspace $> ()

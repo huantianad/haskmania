@@ -83,7 +83,7 @@ bpm :: Int
 bpm = 95
 
 scrollSpeed :: Int
-scrollSpeed = 20
+scrollSpeed = 40
 
 rowOrientation :: Orientation
 rowOrientation = Vertical
@@ -270,7 +270,7 @@ initialState s tk ds =
     }
   where
     timesBeats :: [Integer] -> [Double]
-    timesBeats = map (\i -> fromIntegral i / fromIntegral bpm * 60)
+    timesBeats = map (\i -> fromIntegral i / fromIntegral bpm * 60 / 2)
 
 theMap :: A.AttrMap
 theMap =
